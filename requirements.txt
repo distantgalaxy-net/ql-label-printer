@@ -1,0 +1,5 @@
+# labelprinter Python packages (pinned so rebuilds behave the same)
+brother_ql_next==0.12.0   # maintained fork of brother_ql; talks to the QL-810W
+Pillow==10.4.0            # draws the labels
+Flask==3.0.3              # web page + API
+waitress==3.0.0           # production web server

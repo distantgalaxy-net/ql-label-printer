@@ -1,0 +1,9 @@
+# Python caches
+__pycache__/
+*.pyc
+# Runtime data on the NAS: saved details, presets (contains personal info)
+data/settings.json
+data/settings.json.tmp
+# Custom icons are personal; keep the folder only
+data/icons/*
+!data/icons/.keep

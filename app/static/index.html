@@ -1,0 +1,279 @@
+<!doctype html>
+<!--
+  labelprinter - label printing page (phone-first)
+  Date: 2026-11-07 18:15 GMT
+  Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
+  One form per label type; the preview updates as you type, then Print.
+-->
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Label Printer</title>
+<style>
+  :root {
+    --bg: #f3f4f1; --card: #ffffff; --fg: #1d2420; --muted: #5d6a63; --line: #d9ddd7;
+    --accent: #2f6b4f; --accent-fg: #ffffff; --ok: #2f7d4a; --bad: #b3402f; --field: #fbfbfa;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #121614; --card: #1b201d; --fg: #e5ebe7; --muted: #9aa8a0; --line: #2d3530;
+            --accent: #5fae86; --accent-fg: #0f1411; --ok: #6cc58c; --bad: #ef8a78; --field: #161a18;
+            color-scheme: dark; }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .wrap { max-width: 560px; margin: 0 auto; padding: 14px 16px calc(110px + env(safe-area-inset-bottom)); }
+  h1 { font-size: 1.25rem; margin: 4px 0 12px; }
+  nav { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 12px; }
+  nav button { flex: none; border: 1px solid var(--line); background: var(--card); color: var(--fg);
+    padding: 8px 14px; border-radius: 999px; font: inherit; font-size: .95rem; cursor: pointer; }
+  nav button[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+  form { display: grid; gap: 12px; }
+  label { display: grid; gap: 4px; font-size: .9rem; color: var(--muted); }
+  input, select, textarea { font: inherit; color: var(--fg); background: var(--field);
+    border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; width: 100%; }
+  textarea { min-height: 96px; resize: vertical; }
+  textarea.mono { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: .9rem; }
+  .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+  .seg { display: flex; gap: 6px; flex-wrap: wrap; }
+  .seg label { display: flex; align-items: center; gap: 6px; color: var(--fg); border: 1px solid var(--line);
+    border-radius: 8px; padding: 8px 10px; background: var(--field); }
+  .seg input { width: auto; }
+  .small { font-size: .85rem; color: var(--muted); margin: 0; }
+  .linkbtn { font: inherit; font-size: .9rem; background: none; border: 0; color: var(--accent); padding: 0; cursor: pointer; justify-self: start; }
+  .preview { margin-bottom: 12px; }
+  .preview .small { margin-top: 4px; }
+  .preview .paper { background: #fff; border: 1px solid var(--line); border-radius: 6px; padding: 8px; text-align: center; }
+  .preview img { max-width: 100%; height: auto; image-rendering: pixelated; display: block; margin: 0 auto; }
+  .bar { position: fixed; left: 0; right: 0; bottom: 0; background: var(--card); border-top: 1px solid var(--line);
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); }
+  .bar .in { max-width: 560px; margin: 0 auto; display: flex; gap: 10px; align-items: center; }
+  .bar input { width: 70px; text-align: center; }
+  .bar button { flex: 1; font: inherit; font-weight: 600; border: 0; border-radius: 10px; padding: 12px;
+    background: var(--accent); color: var(--accent-fg); cursor: pointer; }
+  .bar button:disabled { opacity: .55; }
+  #status { min-height: 1.4em; margin: 8px 0 0; font-size: .92rem; }
+  #status.ok { color: var(--ok); } #status.bad { color: var(--bad); }
+  [hidden] { display: none !important; }
+  button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Label Printer</h1>
+  <nav role="tablist" id="tabs">
+    <button role="tab" data-kind="address">Address</button>
+    <button role="tab" data-kind="freezer">Freezer</button>
+    <button role="tab" data-kind="travel">Travel</button>
+    <button role="tab" data-kind="battery">Battery</button>
+    <button role="tab" data-kind="network">Network</button>
+  </nav>
+
+  <div class="preview">
+    <div class="paper"><img id="preview" alt="Label preview"></div>
+    <p class="small" id="length"></p>
+  </div>
+
+  <div class="card">
+    <!-- Address -->
+    <form data-kind="address" hidden>
+      <label>Name<input id="a-name" name="name" autocomplete="off" placeholder="Alex Example"></label>
+      <label>Address (one line per row)<textarea id="a-address" name="address" placeholder="1 High Street&#10;Anytown&#10;AB1 2CD"></textarea></label>
+      <label>Icon<select id="a-icon" name="icon"><option value="none">None</option></select></label>
+    </form>
+
+    <!-- Freezer -->
+    <form data-kind="freezer" hidden>
+      <label>Preset<select id="f-preset"><option value="">Choose a saved food…</option></select></label>
+      <label>Food<input id="f-title" name="title" autocomplete="off" placeholder="Beef chilli"></label>
+      <div class="row">
+        <label>Frozen on<input id="f-frozen" name="frozen" type="date"></label>
+        <label>Use within (months)<input id="f-months" name="months" type="number" min="0" max="24" inputmode="numeric"></label>
+      </div>
+      <div class="seg" role="radiogroup" aria-label="How to cook">
+        <label><input type="radio" name="method" value="from_frozen" checked> From frozen</label>
+        <label><input type="radio" name="method" value="defrost"> Defrost first</label>
+        <label><input type="radio" name="method" value=""> No instructions</label>
+      </div>
+      <div class="row">
+        <label>Minutes<input id="f-minutes" name="minutes" type="number" min="0" inputmode="numeric"></label>
+        <label>Temp °C<input id="f-temp" name="temp_c" type="number" min="0" inputmode="numeric"></label>
+        <label>Fan °C<input id="f-fan" name="fan_c" type="number" min="0" inputmode="numeric"></label>
+      </div>
+      <label>Notes (optional)<textarea id="f-notes" name="notes" style="min-height:60px" placeholder="Stir halfway"></textarea></label>
+      <button type="button" class="linkbtn" id="f-save">Save as preset</button>
+    </form>
+
+    <!-- Travel -->
+    <form data-kind="travel" hidden>
+      <label>Name<input id="t-name" name="name"></label>
+      <label>Address<input id="t-address" name="address"></label>
+      <label>Phone<input id="t-phone" name="phone" type="tel"></label>
+      <button type="button" class="linkbtn" id="t-save">Save as my details</button>
+      <label>Flights (leave a blank line between journeys)<textarea id="t-flights" name="flights" class="mono" placeholder="1 March 0900-1130, XX 0123, AAA-BBB&#10;2 March 1400-1630, XX 0456, BBB-CCC"></textarea></label>
+    </form>
+
+    <!-- Battery -->
+    <form data-kind="battery" hidden>
+      <label>Device<input id="b-device" name="device" autocomplete="off" placeholder="Hallway motion sensor"></label>
+      <div class="row">
+        <label>Battery<input id="b-battery" name="battery" list="b-types" placeholder="CR2032"></label>
+        <label>Changed on<input id="b-changed" name="changed" type="date"></label>
+      </div>
+      <datalist id="b-types"></datalist>
+      <p class="small">Prints the smallest label the printer allows, about 13mm long.</p>
+    </form>
+
+    <!-- Network -->
+    <form data-kind="network" hidden>
+      <label>Device name<input id="n-name" name="name" autocomplete="off" placeholder="Label printer"></label>
+      <div class="row">
+        <label>IP address<input id="n-ip" name="ip" inputmode="decimal" placeholder="192.168.1.20"></label>
+        <label>VLAN<select id="n-vlan" name="vlan"><option value="">–</option></select></label>
+      </div>
+      <label>MAC (optional)<input id="n-mac" name="mac" autocomplete="off"></label>
+      <label>Notes (optional)<textarea id="n-notes" name="notes" style="min-height:60px"></textarea></label>
+    </form>
+
+    <p id="status" role="status"></p>
+  </div>
+</div>
+
+<div class="bar">
+  <div class="in">
+    <input id="copies" type="number" min="1" max="20" value="1" aria-label="Copies" inputmode="numeric">
+    <button id="print" type="button">Print</button>
+  </div>
+</div>
+
+<script>
+// ---- state -------------------------------------------------------
+let settings = {};
+let kind = "address";
+let previewTimer = null;
+let previewUrl = null;
+const $ = (id) => document.getElementById(id);
+// Today's date in the phone's own time zone, as YYYY-MM-DD
+const today = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
+
+// Collect the active form's fields into a plain object
+function formData(k) {
+  const f = document.querySelector(`form[data-kind="${k}"]`);
+  const out = {};
+  for (const el of f.elements) {
+    if (!el.name) continue;
+    if (el.type === "radio") { if (el.checked) out[el.name] = el.value; continue; }
+    out[el.name] = el.value;
+  }
+  return out;
+}
+
+function setStatus(msg, cls) { const s = $("status"); s.textContent = msg || ""; s.className = cls || ""; }
+
+// ---- tabs --------------------------------------------------------
+function showTab(k) {
+  kind = k;
+  document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.kind === k)));
+  document.querySelectorAll("form[data-kind]").forEach(f => f.hidden = f.dataset.kind !== k);
+  try { localStorage.setItem("labelprinter-tab", k); } catch (e) {}
+  setStatus("");
+  schedulePreview(0);
+}
+document.querySelectorAll("#tabs button").forEach(b => b.addEventListener("click", () => showTab(b.dataset.kind)));
+
+// ---- preview -----------------------------------------------------
+function schedulePreview(delay = 350) {
+  clearTimeout(previewTimer);
+  previewTimer = setTimeout(updatePreview, delay);
+}
+async function updatePreview() {
+  try {
+    const r = await fetch(`/api/preview/${kind}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(formData(kind)) });
+    if (!r.ok) { const j = await r.json().catch(() => ({})); setStatus(j.message || "Preview failed", "bad"); return; }
+    const blob = await r.blob();
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    previewUrl = URL.createObjectURL(blob);
+    $("preview").src = previewUrl;
+    const mm = r.headers.get("X-Label-Length-mm");
+    $("length").textContent = mm ? `62mm wide × about ${mm}mm long` : "";
+  } catch (e) { setStatus("Can't reach the label service", "bad"); }
+}
+document.querySelectorAll("form").forEach(f => {
+  f.addEventListener("input", () => schedulePreview());
+  f.addEventListener("submit", e => e.preventDefault());
+});
+
+// ---- print -------------------------------------------------------
+$("print").addEventListener("click", async () => {
+  const btn = $("print");
+  btn.disabled = true; btn.textContent = "Printing…"; setStatus("");
+  try {
+    const body = Object.assign(formData(kind), { copies: $("copies").value || 1 });
+    const r = await fetch(`/api/print/${kind}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const j = await r.json().catch(() => ({ ok: false, message: "No reply from the label service" }));
+    setStatus(j.ok ? "Printed" : j.message, j.ok ? "ok" : "bad");
+  } catch (e) { setStatus("Can't reach the label service", "bad"); }
+  btn.disabled = false; btn.textContent = "Print";
+});
+
+// ---- settings: presets, my details, lists ------------------------
+async function saveSettings(patch) {
+  Object.assign(settings, patch);
+  const r = await fetch("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) });
+  return r.ok;
+}
+
+function fillPresets() {
+  const sel = $("f-preset");
+  sel.length = 1;
+  (settings.freezer_presets || []).forEach((p, i) => sel.add(new Option(p.title, i)));
+}
+$("f-preset").addEventListener("change", e => {
+  const p = (settings.freezer_presets || [])[e.target.value];
+  if (!p) return;
+  $("f-title").value = p.title || "";
+  $("f-months").value = p.months ?? "";
+  $("f-minutes").value = p.minutes ?? "";
+  $("f-temp").value = p.temp_c ?? "";
+  $("f-fan").value = p.fan_c ?? "";
+  $("f-notes").value = p.notes || "";
+  document.querySelectorAll('form[data-kind="freezer"] input[name="method"]').forEach(r => r.checked = r.value === (p.method ?? ""));
+  schedulePreview(0);
+});
+$("f-save").addEventListener("click", async () => {
+  const d = formData("freezer");
+  if (!d.title.trim()) { setStatus("Type the food name first", "bad"); return; }
+  const preset = { title: d.title.trim(), months: d.months, method: d.method, minutes: d.minutes, temp_c: d.temp_c, fan_c: d.fan_c, notes: d.notes };
+  const list = (settings.freezer_presets || []).filter(p => p.title.toLowerCase() !== preset.title.toLowerCase());
+  list.push(preset); list.sort((a, b) => a.title.localeCompare(b.title));
+  setStatus(await saveSettings({ freezer_presets: list }) ? `Saved “${preset.title}”` : "Couldn't save the preset", "ok");
+  fillPresets();
+});
+$("t-save").addEventListener("click", async () => {
+  const me = { name: $("t-name").value, address: $("t-address").value, phone: $("t-phone").value };
+  setStatus(await saveSettings({ me }) ? "Saved your details" : "Couldn't save", "ok");
+});
+
+async function init() {
+  try { settings = await (await fetch("/api/settings")).json(); } catch (e) { settings = {}; }
+  try {
+    const icons = await (await fetch("/api/icons")).json();
+    icons.forEach(n => $("a-icon").add(new Option(n.charAt(0).toUpperCase() + n.slice(1), n)));
+  } catch (e) {}
+  fillPresets();
+  (settings.battery_types || []).forEach(t => $("b-types").append(new Option(t)));
+  (settings.vlans || []).forEach(v => $("n-vlan").add(new Option(v, v)));
+  const me = settings.me || {};
+  $("t-name").value = me.name || ""; $("t-address").value = me.address || ""; $("t-phone").value = me.phone || "";
+  $("f-frozen").value = today(); $("b-changed").value = today();
+  let start = "address";
+  try { start = localStorage.getItem("labelprinter-tab") || start; } catch (e) {}
+  showTab(start);
+}
+init();
+</script>
+</body>
+</html>

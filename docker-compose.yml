@@ -1,0 +1,25 @@
+# ------------------------------------------------------------------
+# labelprinter - Brother QL-810W label print service (Phase 1)
+# Date: 2026-11-07 18:30 GMT
+# Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
+#
+# Builds the image from the Dockerfile in this folder. Web page at
+# http://labels.home.example (Trusted + VPN only, via DSM reverse
+# proxy -> localhost:8013). Home Assistant (homeassistant, host network) can
+# call http://127.0.0.1:8013/api/print/<type>.
+# ------------------------------------------------------------------
+services:
+  labelprinter:
+    build: .                              # build from ./Dockerfile
+    image: labelprinter:latest
+    container_name: labelprinter
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8013:8013"             # NAS-only: reverse proxy + HA
+    volumes:
+      - ./data:/data                      # settings.json, presets, icons/
+    environment:
+      PRINTER: "tcp://192.168.1.20:9100"  # printer on IoT
+      MODEL: "QL-810W"
+      LABEL: "62"                         # 62mm continuous black/white roll
+      TZ: "Europe/London"                 # so "today" is the UK date
