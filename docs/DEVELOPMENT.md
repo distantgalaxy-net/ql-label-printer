@@ -3,7 +3,7 @@
 Read this before changing the code. It explains what we're building, the decisions already made
 and the constraints that aren't obvious from the code.
 
-_Last updated: 2026-11-07 · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Last updated: 2026-11-07 19:44 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 ---
 
@@ -23,7 +23,8 @@ The container is called **labelprinter**.
 - Label types: `address` (optional icon), `freezer` (presets, use-by, cooking
   instructions), `travel` (saved details + flights), `battery` (tiny),
   `network` (name/IP/VLAN/MAC).
-- Settings/presets persist in `/data/settings.json` (git-ignored).
+- Settings/presets persist in `/data/settings.json` (git-ignored), including
+  the printer's IP address and port, entered in the page's **Settings** tab.
 
 **Phase 2 – planned, not urgent (don't start without Ash asking):**
 - Address lookup from **Google Contacts** (People API, via Ash's existing
@@ -41,8 +42,9 @@ The container is called **labelprinter**.
 - **Minimum length:** the QL-810W rejects continuous labels shorter than
   **150 dots (12.7mm)**. `labels.render()` pads short labels; keep that.
 - **Black/white only** (`red=False`). Red would need DK-22251 rolls.
-- **Printer** is on the network, raw TCP port **9100**:
-  `tcp://192.168.1.20:9100` (env `PRINTER`). Editor Lite must be off.
+- **Printer** is on the network, raw TCP port **9100**. Its IP address and
+  port are set in the **Settings** tab (`settings.json` → `printer`), never in
+  code, Docker files or as examples. Editor Lite must be off.
 - `brother_ql`'s socket has no connect timeout; `printer.py` caps it at 10 s so
   a firewall drop returns an error instead of hanging. Keep that.
 
@@ -70,7 +72,8 @@ How it's locked down – don't weaken any of this:
   Plain HTTP on purpose (a public cert would need internet exposure).
 - UniFi policy "NAS → Printer": allow 192.168.1.10 → 192.168.1.20 TCP 9100,
   Connection State **All** (not "Return Traffic").
-- Never commit personal data. `data/settings.json` (Ash's address/phone,
+- Never commit personal data – including in placeholders/examples (use
+  generic ones like "Alex Example", "1 High Street", `192.168.1.20`). `data/settings.json` (Ash's address/phone,
   presets) and custom icons are git-ignored.
 
 ## Where it runs
@@ -126,3 +129,7 @@ valid for the QL-810W (it raises if the size is wrong).
   black/white looked poor). Custom PNGs in `/data/icons` override them.
 - 2026-11-07 – Phone is the main way Ash prints; the page shows the preview
   at the top.
+- 2026-11-07 – Printer IP/port moved from the `PRINTER` env var to the
+  Settings tab so the code holds no home-network details (possible public
+  release). Success message is "Label sent to printer" because the network
+  backend can't confirm a label actually came out.

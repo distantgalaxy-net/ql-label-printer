@@ -1,6 +1,6 @@
 # ------------------------------------------------------------------
 # labelprinter - label print service (web page + API)
-# Date: 2026-11-07 18:10 GMT
+# Date: 2026-11-07 19:44 GMT (updated; first written 18:10 GMT)
 # Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
 #
 # Serves the phone-friendly web page and a small JSON API:
@@ -10,11 +10,15 @@
 #   GET  /api/icons             icon names for address labels
 #   POST /api/preview/<kind>    PNG preview of a label
 #   POST /api/print/<kind>      print it  -> {"ok": bool, "message": str}
+#   POST /api/printer/test      check the printer can be reached (no print)
 # <kind> is address | freezer | travel | battery | network.
 # Home Assistant can call /api/print/<kind> with the same JSON.
 #
 # No login: keep it on the home network (NAS-only port + trusted-only
 # reverse proxy).
+#
+# The printer's IP address and port are saved from the Settings tab
+# (settings.json "printer"), not hard-coded, so each install sets its own.
 # ------------------------------------------------------------------
 import io
 import json
@@ -34,6 +38,9 @@ STATIC = os.path.join(os.path.dirname(__file__), "static")
 # Starting settings, written on first run; everything is editable in the page
 DEFAULT_SETTINGS = {
     "me": {"name": "", "address": "", "phone": ""},
+    # Printer network address: blank until set in the Settings tab.
+    # 9100 is Brother's standard raw printing port.
+    "printer": {"host": "", "port": printer.DEFAULT_PORT},
     "freezer_presets": [],
     "battery_types": ["CR2032", "CR2450", "CR2", "CR123A", "AA", "AAA", "9V"],
     "vlans": [
@@ -81,14 +88,26 @@ def old_link():
 
 @app.get("/api/settings")
 def get_settings():
+    """Return all saved settings (details, presets, lists, printer address)."""
     return jsonify(load_settings())
 
 
 @app.put("/api/settings")
 def put_settings():
+    """Save the settings sent in the body; only known keys are kept.
+
+    A "printer" entry is checked first, so a bad IP address or port is
+    refused with a message instead of being saved.
+    """
     body = request.get_json(silent=True)
     if not isinstance(body, dict):
         return jsonify({"ok": False, "message": "Expected a JSON object"}), 400
+    if "printer" in body:
+        p = body["printer"] if isinstance(body["printer"], dict) else {}
+        host, port, err = printer.validate_address(p.get("host"), p.get("port"))
+        if err:
+            return jsonify({"ok": False, "message": err}), 400
+        body["printer"] = {"host": host, "port": port}
     with _settings_lock:
         merged = load_settings()
         merged.update({k: v for k, v in body.items() if k in DEFAULT_SETTINGS})
@@ -98,6 +117,7 @@ def put_settings():
 
 @app.get("/api/icons")
 def icons():
+    """List the icon names available for address labels."""
     return jsonify(labels.list_icons())
 
 
@@ -114,6 +134,7 @@ def _render_from_request(kind):
 
 @app.post("/api/preview/<kind>")
 def preview(kind):
+    """Render a label and return it as a PNG for the page's preview."""
     img, err = _render_from_request(kind)
     if err:
         return err
@@ -128,6 +149,7 @@ def preview(kind):
 
 @app.post("/api/print/<kind>")
 def do_print(kind):
+    """Render a label and send it to the printer saved in settings."""
     img, err = _render_from_request(kind)
     if err:
         return err
@@ -136,12 +158,28 @@ def do_print(kind):
         copies = max(1, min(20, int(copies)))
     except (TypeError, ValueError):
         copies = 1
-    ok, message = printer.print_image(img, copies)
+    target = load_settings().get("printer") or {}
+    ok, message = printer.print_image(img, target.get("host"), target.get("port"), copies)
+    return jsonify({"ok": ok, "message": message}), (200 if ok else 502)
+
+
+@app.post("/api/printer/test")
+def test_printer():
+    """Try to connect to a printer without printing anything.
+
+    Uses the host/port in the body (so the Settings tab can test before
+    saving), or the saved printer if the body has none.
+    """
+    body = request.get_json(silent=True) or {}
+    if not body.get("host"):
+        body = load_settings().get("printer") or {}
+    ok, message = printer.test_connection(body.get("host"), body.get("port"))
     return jsonify({"ok": ok, "message": message}), (200 if ok else 502)
 
 
 @app.get("/health")
 def health():
+    """Health check used by the Docker HEALTHCHECK."""
     return jsonify({"ok": True})
 
 

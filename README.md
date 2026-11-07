@@ -1,7 +1,7 @@
 # LabelPrinter
 Prints helpful labels on Brother QL-810W
 
-_Updated: 2026-11-07 · Developer: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Updated: 2026-11-07 19:44 GMT · Developer: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 A small self-hosted label service (container **labelprinter** on the Synology NAS
 **the NAS**) that prints on a Brother QL-810W from a phone-friendly web page or
@@ -23,7 +23,7 @@ Phone / laptop (Trusted VLAN or VPN)
 DSM reverse proxy (access profile "Trusted only")
    │  localhost:8013
    ▼
-labelprinter container ──── tcp 9100 ────►  QL-810W (IoT, 192.168.1.20)
+labelprinter container ──── tcp 9100 ────►  QL-810W (IoT; IP set in the Settings tab)
    ▲
    │  http://127.0.0.1:8013/api/print/<type>
 Home Assistant "homeassistant" (host network)
@@ -73,7 +73,8 @@ packages once).
    `pklaus/brother_ql_web`.
 
 Nothing changes in the reverse proxy, the access profile or the UniFi rule:
-the port is still `127.0.0.1:8013` and the printer is still `192.168.1.20:9100`.
+the port is still `127.0.0.1:8013`. The printer's IP address is no longer in
+`docker-compose.yml`: enter it once in the page's **Settings** tab (see below).
 
 ## Updating to a new version
 
@@ -84,6 +85,10 @@ the port is still `127.0.0.1:8013` and the printer is still `192.168.1.20:9100`.
 
 ## First-time setup in the page
 
+- **Settings tab (do this first):** enter the printer's IP address and port
+  (Brother printers use **9100**), tap **Test connection**, then **Save**.
+  The page opens on this tab until a printer is saved. Give the printer a
+  fixed IP (a DHCP reservation in your router) so it doesn't change.
 - **Travel tab:** type your name, address and phone once and tap
   **Save as my details**.
 - **Freezer tab:** fill in a food you freeze often and tap **Save as preset**.
@@ -102,7 +107,8 @@ the built-in). It appears in the Icon list on the next page load.
 
 | Message | Meaning |
 |---|---|
-| Couldn't reach the printer … timed out | Firewall or printer off. Check the UniFi rule NAS → Printer, TCP 9100, Connection State **All**. |
+| No printer set up yet | Enter the printer's IP address in the **Settings** tab and tap Save. |
+| Couldn't reach the printer … timed out | Firewall or printer off, or the wrong IP in the Settings tab. Check the UniFi rule NAS → Printer, TCP 9100, Connection State **All**. |
 | Couldn't reach the printer … refused | Printer reachable but not accepting jobs. Check Editor Lite is off. |
 | Page won't load | Container not running, or you're not on Trusted/VPN. |
 
@@ -140,7 +146,8 @@ data:
 |---|---|
 | `POST /api/preview/<type>` | PNG preview (header `X-Label-Length-mm`) |
 | `POST /api/print/<type>` | Print → `{"ok": true/false, "message": "…"}` (add `"copies": n`) |
-| `GET/PUT /api/settings` | Saved details, freezer presets, battery types, VLAN list |
+| `GET/PUT /api/settings` | Saved details, freezer presets, battery types, VLAN list, `printer` (`host`, `port`) |
+| `POST /api/printer/test` | Check the printer can be reached without printing (body `host`/`port`, or empty to test the saved one) |
 | `GET /api/icons` | Icon names |
 
 `<type>` = `address`, `freezer`, `travel`, `battery`, `network`.

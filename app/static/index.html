@@ -1,9 +1,11 @@
 <!doctype html>
 <!--
   labelprinter - label printing page (phone-first)
-  Date: 2026-11-07 18:15 GMT
+  Date: 2026-11-07 19:44 GMT (updated; first written 18:15 GMT)
   Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
   One form per label type; the preview updates as you type, then Print.
+  The Settings tab holds the printer's IP address and port (saved on the
+  server), so no network details are built into the page or the image.
 -->
 <html lang="en-GB">
 <head>
@@ -43,6 +45,11 @@
     border-radius: 8px; padding: 8px 10px; background: var(--field); }
   .seg input { width: auto; }
   .small { font-size: .85rem; color: var(--muted); margin: 0; }
+  .btn2 { font: inherit; font-size: .95rem; border: 1px solid var(--accent); border-radius: 8px; padding: 9px 14px;
+    background: var(--card); color: var(--accent); cursor: pointer; }
+  .btn2.primary { background: var(--accent); color: var(--accent-fg); }
+  .btn2:disabled { opacity: .55; }
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; }
   .linkbtn { font: inherit; font-size: .9rem; background: none; border: 0; color: var(--accent); padding: 0; cursor: pointer; justify-self: start; }
   .preview { margin-bottom: 12px; }
   .preview .small { margin-top: 4px; }
@@ -70,9 +77,10 @@
     <button role="tab" data-kind="travel">Travel</button>
     <button role="tab" data-kind="battery">Battery</button>
     <button role="tab" data-kind="network">Network</button>
+    <button role="tab" data-kind="settings">Settings</button>
   </nav>
 
-  <div class="preview">
+  <div class="preview" id="preview-box">
     <div class="paper"><img id="preview" alt="Label preview"></div>
     <p class="small" id="length"></p>
   </div>
@@ -131,18 +139,32 @@
     <form data-kind="network" hidden>
       <label>Device name<input id="n-name" name="name" autocomplete="off" placeholder="Label printer"></label>
       <div class="row">
-        <label>IP address<input id="n-ip" name="ip" inputmode="decimal" placeholder="192.168.1.20"></label>
+        <label>IP address<input id="n-ip" name="ip" inputmode="decimal" placeholder="e.g. 192.168.1.20"></label>
         <label>VLAN<select id="n-vlan" name="vlan"><option value="">–</option></select></label>
       </div>
       <label>MAC (optional)<input id="n-mac" name="mac" autocomplete="off"></label>
       <label>Notes (optional)<textarea id="n-notes" name="notes" style="min-height:60px"></textarea></label>
     </form>
 
+    <!-- Settings: not a label, so the preview and Print bar are hidden on this tab -->
+    <form data-kind="settings" hidden>
+      <p class="small">Where to send labels. The printer needs a fixed IP address (set a DHCP reservation in your router) and must accept raw printing on the port below.</p>
+      <div class="row">
+        <label>Printer IP address<input id="s-host" autocomplete="off" inputmode="decimal" placeholder="e.g. 192.168.1.20" spellcheck="false"></label>
+        <label>Port<input id="s-port" type="number" min="1" max="65535" inputmode="numeric" placeholder="9100"></label>
+      </div>
+      <p class="small">Brother printers use port 9100. If printing is refused, turn Editor Lite off on the printer.</p>
+      <div class="actions">
+        <button type="button" class="btn2 primary" id="s-save">Save</button>
+        <button type="button" class="btn2" id="s-test">Test connection</button>
+      </div>
+    </form>
+
     <p id="status" role="status"></p>
   </div>
 </div>
 
-<div class="bar">
+<div class="bar" id="print-bar">
   <div class="in">
     <input id="copies" type="number" min="1" max="20" value="1" aria-label="Copies" inputmode="numeric">
     <button id="print" type="button">Print</button>
@@ -174,13 +196,18 @@ function formData(k) {
 function setStatus(msg, cls) { const s = $("status"); s.textContent = msg || ""; s.className = cls || ""; }
 
 // ---- tabs --------------------------------------------------------
+// Show one tab's form. The Settings tab isn't a label, so it hides the
+// preview and the Print bar and skips the preview request.
 function showTab(k) {
   kind = k;
+  const isSettings = k === "settings";
   document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.kind === k)));
   document.querySelectorAll("form[data-kind]").forEach(f => f.hidden = f.dataset.kind !== k);
+  $("preview-box").hidden = isSettings;
+  $("print-bar").hidden = isSettings;
   try { localStorage.setItem("labelprinter-tab", k); } catch (e) {}
   setStatus("");
-  schedulePreview(0);
+  if (!isSettings) schedulePreview(0);
 }
 document.querySelectorAll("#tabs button").forEach(b => b.addEventListener("click", () => showTab(b.dataset.kind)));
 
@@ -190,6 +217,7 @@ function schedulePreview(delay = 350) {
   previewTimer = setTimeout(updatePreview, delay);
 }
 async function updatePreview() {
+  if (kind === "settings") return;   // nothing to preview on the Settings tab
   try {
     const r = await fetch(`/api/preview/${kind}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(formData(kind)) });
     if (!r.ok) { const j = await r.json().catch(() => ({})); setStatus(j.message || "Preview failed", "bad"); return; }
@@ -214,16 +242,24 @@ $("print").addEventListener("click", async () => {
     const body = Object.assign(formData(kind), { copies: $("copies").value || 1 });
     const r = await fetch(`/api/print/${kind}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const j = await r.json().catch(() => ({ ok: false, message: "No reply from the label service" }));
-    setStatus(j.ok ? "Printed" : j.message, j.ok ? "ok" : "bad");
+    // The server's message: "Label sent to printer" or what went wrong
+    setStatus(j.message || (j.ok ? "Label sent to printer" : "Printing failed"), j.ok ? "ok" : "bad");
   } catch (e) { setStatus("Can't reach the label service", "bad"); }
   btn.disabled = false; btn.textContent = "Print";
 });
 
 // ---- settings: presets, my details, lists ------------------------
+// Save part of the settings. Returns true, or false if the server refused
+// it (the reason is kept in lastSaveError, e.g. a bad IP address).
+let lastSaveError = "";
 async function saveSettings(patch) {
+  lastSaveError = "";
+  try {
+    const r = await fetch("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) });
+    if (!r.ok) { lastSaveError = ((await r.json().catch(() => ({}))).message) || "Couldn't save"; return false; }
+  } catch (e) { lastSaveError = "Can't reach the label service"; return false; }
   Object.assign(settings, patch);
-  const r = await fetch("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) });
-  return r.ok;
+  return true;
 }
 
 function fillPresets() {
@@ -257,6 +293,29 @@ $("t-save").addEventListener("click", async () => {
   setStatus(await saveSettings({ me }) ? "Saved your details" : "Couldn't save", "ok");
 });
 
+// ---- Settings tab: printer IP address and port --------------------
+// Read the two fields as the object the API expects
+function printerFields() {
+  return { host: $("s-host").value.trim(), port: $("s-port").value.trim() || 9100 };
+}
+$("s-save").addEventListener("click", async () => {
+  const ok = await saveSettings({ printer: printerFields() });
+  setStatus(ok ? "Printer settings saved" : lastSaveError, ok ? "ok" : "bad");
+});
+// Test the address in the boxes (saved or not) without printing anything
+$("s-test").addEventListener("click", async () => {
+  const btn = $("s-test");
+  btn.disabled = true; btn.textContent = "Testing…"; setStatus("");
+  try {
+    const r = await fetch("/api/printer/test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(printerFields()) });
+    const j = await r.json().catch(() => ({ ok: false, message: "No reply from the label service" }));
+    setStatus(j.message, j.ok ? "ok" : "bad");
+  } catch (e) { setStatus("Can't reach the label service", "bad"); }
+  btn.disabled = false; btn.textContent = "Test connection";
+});
+
+// Load settings and lists, fill the forms, then open the last-used tab
+// (or the Settings tab if no printer has been set up yet)
 async function init() {
   try { settings = await (await fetch("/api/settings")).json(); } catch (e) { settings = {}; }
   try {
@@ -268,10 +327,14 @@ async function init() {
   (settings.vlans || []).forEach(v => $("n-vlan").add(new Option(v, v)));
   const me = settings.me || {};
   $("t-name").value = me.name || ""; $("t-address").value = me.address || ""; $("t-phone").value = me.phone || "";
+  const pr = settings.printer || {};
+  $("s-host").value = pr.host || ""; $("s-port").value = pr.port || 9100;
   $("f-frozen").value = today(); $("b-changed").value = today();
   let start = "address";
   try { start = localStorage.getItem("labelprinter-tab") || start; } catch (e) {}
+  if (!pr.host) start = "settings";
   showTab(start);
+  if (!pr.host) setStatus("Set up your printer first: enter its IP address and tap Save.", "bad");
 }
 init();
 </script>
