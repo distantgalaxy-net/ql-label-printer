@@ -1,20 +1,29 @@
 # ------------------------------------------------------------------
 # labelprinter - label layouts
-# Date: 2026-11-08 16:01 GMT (updated; first written 2026-11-07 18:10 GMT)
+# Date: 2026-11-08 21:55 GMT (updated; first written 2026-11-07 18:10 GMT)
 # Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
 #
 # Turns form data into a black-and-white image the exact width of the
 # 62mm continuous roll (696 dots at 300 dpi). The label's LENGTH grows
 # with its content, so nothing is ever printed landscape.
 #
-# Label types: address, freezer, travel, battery, network.
+# Label types: address, food (freezer / fridge / cupboard), travel,
+# battery, network. "freezer" is kept as another name for "food" so older
+# Home Assistant calls still work.
 #
 # "Today" (default dates on labels) uses the time zone chosen in the
-# Settings tab, so daylight saving is handled by the tz database.
+# Settings tab, so daylight saving is handled by the tz database. The
+# temperature unit (°C or °F) also comes from the Settings tab.
+#
+# Also here: custom icon upload/delete (pictures are converted to
+# black-and-white squares and saved in /data/icons, never in the image),
+# and the flight helpers for travel labels (format, sort, split into
+# journeys, and read flights pasted as text).
 # ------------------------------------------------------------------
 import contextvars
 import os
-from datetime import date, datetime
+import re
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps
@@ -78,10 +87,11 @@ def line_height(role, size, spacing=1.18):
 
 
 # ---------------------------------------------------------------- icons
-# Built-in icons are simple bold line drawings (drawn below at 512 dots,
-# then scaled down), in the same style as the iPrint&Label icons.
-# To add or replace one, drop a black-on-white PNG into /data/icons
-# (e.g. wedding.png) - files there take priority over built-ins.
+# Built-in icons are simple bold line drawings, drawn by the code below at
+# 512 dots and then scaled down (no image files, so no third-party artwork).
+# Custom icons are uploaded from the Address tab (or copied into
+# /data/icons as black-on-white PNGs); they take priority over built-ins
+# with the same name. /data is never part of the repo or the image.
 ICON_DIR = os.environ.get("ICON_DIR", "/data/icons")
 S = 512            # drawing canvas size for built-in icons
 LW = 34            # line width at that size
@@ -184,17 +194,43 @@ BUILTIN_ICONS = {
 }
 
 
+# Custom icon names: letters, digits, spaces, hyphens and underscores only,
+# so a name can never point outside ICON_DIR (e.g. "../something").
+_ICON_NAME = re.compile(r"^[a-z0-9][a-z0-9 _-]{0,29}$")
+# Picture formats accepted for upload, and the largest picture we'll open
+UPLOAD_FORMATS = {"PNG", "JPEG", "GIF", "WEBP", "BMP"}
+MAX_UPLOAD_PIXELS = 40_000_000
+THRESHOLD = 140    # grey levels darker than this become black
+
+
+def clean_icon_name(name):
+    """Return a safe, lower-case icon name, or None if it isn't allowed."""
+    name = re.sub(r"\s+", " ", (name or "").strip().lower())
+    return name if _ICON_NAME.match(name) else None
+
+
+def _custom_names():
+    """Names of the custom PNG icons in ICON_DIR (uploaded or copied in)."""
+    if not os.path.isdir(ICON_DIR):
+        return []
+    return sorted(os.path.splitext(f)[0] for f in os.listdir(ICON_DIR)
+                  if f.lower().endswith(".png") and clean_icon_name(os.path.splitext(f)[0]))
+
+
 def list_icons():
-    """Names of all icons available: custom PNGs first, then built-ins."""
-    custom = []
-    if os.path.isdir(ICON_DIR):
-        custom = sorted(os.path.splitext(f)[0] for f in os.listdir(ICON_DIR)
-                        if f.lower().endswith(".png"))
-    return custom + [k for k in BUILTIN_ICONS if k not in custom]
+    """All icons for the page: custom ones first, then built-ins.
+
+    Each entry is {"name", "custom"}. A custom icon with a built-in's name
+    replaces that built-in; deleting it brings the built-in back.
+    """
+    custom = _custom_names()
+    return ([{"name": n, "custom": True} for n in custom] +
+            [{"name": k, "custom": False} for k in BUILTIN_ICONS if k not in custom])
 
 
 def load_icon(name, size):
     """Return a square black-and-white icon of `size` dots, or None."""
+    name = clean_icon_name(name)
     if not name or name == "none":
         return None
     # 1. A custom PNG wins
@@ -204,15 +240,59 @@ def load_icon(name, size):
         bg = Image.new("RGBA", img.size, "white")
         img = Image.alpha_composite(bg, img).convert("L")
         img = ImageOps.contain(img, (size, size))
-        return _square(img, size).point(lambda v: 0 if v < 140 else 255)
+        return _square(img, size).point(lambda v: 0 if v < THRESHOLD else 255)
     # 2. Otherwise a built-in drawing
     draw_fn = BUILTIN_ICONS.get(name)
     if draw_fn:
         canvas = Image.new("L", (S, S), 255)
         draw_fn(ImageDraw.Draw(canvas))
         small = canvas.resize((size, size), Image.Resampling.LANCZOS)
-        return small.point(lambda v: 0 if v < 140 else 255)
+        return small.point(lambda v: 0 if v < THRESHOLD else 255)
     return None
+
+
+def save_custom_icon(name, stream):
+    """Convert an uploaded picture into a custom icon. Returns (name, error).
+
+    The picture (PNG, JPEG, GIF, WebP or BMP) is flattened onto white,
+    turned to greyscale, trimmed to its content, fitted into a 512-dot
+    square and converted to pure black and white, then saved as
+    <name>.png in ICON_DIR. On the label it prints about 16mm square.
+    """
+    name = clean_icon_name(name)
+    if not name or name == "none":
+        return None, "Give the icon a name: letters, numbers, spaces or hyphens (up to 30)."
+    try:
+        img = Image.open(stream)
+        if img.format not in UPLOAD_FORMATS:
+            return None, "Use a PNG, JPEG, GIF, WebP or BMP picture."
+        if img.width * img.height > MAX_UPLOAD_PIXELS:
+            return None, "That picture is too large. Try one under 40 megapixels."
+        img.seek(0)                                # first frame of a GIF
+        img = ImageOps.exif_transpose(img)         # phone photos: fix rotation
+        rgba = img.convert("RGBA")
+    except Exception:
+        return None, "That file isn't a picture this can read."
+    flat = Image.alpha_composite(Image.new("RGBA", rgba.size, "white"), rgba).convert("L")
+    # Trim plain white margins so the drawing fills the square
+    box = flat.point(lambda v: 255 if v < THRESHOLD else 0).getbbox()
+    if not box:
+        return None, "The picture came out blank. Use one with dark shapes on a light background."
+    flat = ImageOps.contain(flat.crop(box), (S, S), Image.Resampling.LANCZOS)
+    bw = _square(flat, S).point(lambda v: 0 if v < THRESHOLD else 255).convert("1")
+    os.makedirs(ICON_DIR, exist_ok=True)
+    bw.save(os.path.join(ICON_DIR, f"{name}.png"))
+    return name, None
+
+
+def delete_custom_icon(name):
+    """Delete a custom icon. Returns True if one was removed (built-ins can't be)."""
+    name = clean_icon_name(name)
+    path = os.path.join(ICON_DIR, f"{name}.png") if name else None
+    if path and os.path.exists(path):
+        os.remove(path)
+        return True
+    return False
 
 
 def _square(img, size):
@@ -226,12 +306,14 @@ def _square(img, size):
 # Time zone for the label being rendered (set by render(); requests can run
 # in parallel threads, so a context variable keeps each one separate)
 _tz = contextvars.ContextVar("label_tz", default="UTC")
+# Temperature unit from the Settings tab: "C" or "F"
+_unit = contextvars.ContextVar("label_unit", default="C")
 
 
-def today():
-    """Today's date in the time zone from the Settings tab (UTC if unset/unknown)."""
+def today(tz=None):
+    """Today's date in the Settings time zone (or `tz`); UTC if unset/unknown."""
     try:
-        zone = ZoneInfo(_tz.get() or "UTC")
+        zone = ZoneInfo(tz or _tz.get() or "UTC")
     except (ZoneInfoNotFoundError, ValueError):
         zone = ZoneInfo("UTC")
     return datetime.now(zone).date()
@@ -322,42 +404,80 @@ def address(data):
     return img
 
 
-def freezer(data):
+# Food storage types: what the first date means, and the usual unit for
+# "use within" (months in the freezer, days in the fridge or cupboard)
+STORAGE = {
+    "frozen":   {"date_word": "Frozen", "unit": "months"},
+    "fridge":   {"date_word": "Opened", "unit": "days"},
+    "cupboard": {"date_word": "Opened", "unit": "days"},
+}
+# Cooking method -> heading line on the label ("cook" = no heading, just
+# the time and temperature; "none" = no cooking instructions at all)
+METHODS = {"from_frozen": "Cook from frozen", "defrost": "Defrost first", "cook": "", "": ""}
+
+
+def _number(value):
+    """A whole number from a form field, or None if it's blank or not a number."""
+    try:
+        return int(float(str(value).strip()))
+    except (TypeError, ValueError):
+        return None
+
+
+def food(data):
     """
-    Freezer label: food title, frozen date, use-by date (from months),
-    and cooking instructions (defrost first / from frozen, time, temps).
-    data: title, frozen (YYYY-MM-DD), months, method, minutes, temp_c, fan_c, notes
+    Food label: food name, the frozen/opened date, a use-by date worked out
+    from "use within" days or months, optional cooking instructions and notes.
+    data: title, storage (frozen | fridge | cupboard), date (YYYY-MM-DD,
+          default today), shelf (number), shelf_unit (days | months),
+          method (from_frozen | defrost | cook | none), minutes, temp, fan, notes.
+    Temperatures are in the unit chosen in Settings (°C or °F).
+    Older freezer fields still work: frozen, months, temp_c, fan_c.
     """
     title = (data.get("title") or "").strip()
-    frozen_d = datetime.strptime(data["frozen"], "%Y-%m-%d").date() if data.get("frozen") else today()
-    months = int(data["months"]) if str(data.get("months") or "").strip() else 0
+    storage = data.get("storage") if data.get("storage") in STORAGE else "frozen"
+    kind = STORAGE[storage]
+    raw_date = data.get("date") or data.get("frozen")
+    start = datetime.strptime(raw_date[:10], "%Y-%m-%d").date() if raw_date else today()
+
+    # "Use within": new fields first, then the old freezer "months"
+    amount, unit = _number(data.get("shelf")), data.get("shelf_unit")
+    if amount is None and _number(data.get("months")) is not None:
+        amount, unit = _number(data.get("months")), "months"
+    unit = unit if unit in ("days", "months") else kind["unit"]
 
     usable = WIDTH - 2 * SIDE
     lines = [{"text": title, "role": "sans-bold", "size": fit_size([title], "sans-bold", 72, usable), "align": "center"}]
 
-    dates = f"Frozen {uk_date(frozen_d)}"
-    if months:
-        dates += f"  ·  Use by {uk_date(add_months(frozen_d, months))}"
+    dates = f"{kind['date_word']} {uk_date(start)}"
+    if amount:
+        use_by = add_months(start, amount) if unit == "months" else start + timedelta(days=amount)
+        dates += f"  ·  Use by {uk_date(use_by)}"
     lines.append({"text": dates, "role": "cond", "size": fit_size([dates], "cond", 40, usable), "align": "center", "gap": 8})
 
-    method = {"from_frozen": "Cook from frozen", "defrost": "Defrost first"}.get(data.get("method"), "")
-    parts = []
-    if str(data.get("minutes") or "").strip():
-        parts.append(f"{data['minutes']} min")
-    temps = []
-    if str(data.get("temp_c") or "").strip():
-        temps.append(f"{data['temp_c']}°C")
-    if str(data.get("fan_c") or "").strip():
-        temps.append(f"{data['fan_c']}°C fan")
-    if temps:
-        parts.append("@ " + " / ".join(temps))
-    cook = "  ".join(parts)
-    cook_lines = [t for t in (method, cook) if t]
-    if cook_lines:
-        size = fit_size(cook_lines, "sans", 40, usable)
-        for i, t in enumerate(cook_lines):
-            lines.append({"text": t, "role": "sans-bold" if i == 0 and method else "sans",
-                          "size": size, "align": "center", "gap": 14 if i == 0 else 0})
+    method = data.get("method") or ""
+    if method != "none":
+        heading = METHODS.get(method, "")
+        # Old freezer fields were always °C; new ones use the Settings unit
+        temp, fan, sym = data.get("temp"), data.get("fan"), _unit.get()
+        if temp in (None, "") and fan in (None, "") and (data.get("temp_c") or data.get("fan_c")):
+            temp, fan, sym = data.get("temp_c"), data.get("fan_c"), "C"
+        parts = []
+        if str(data.get("minutes") or "").strip():
+            parts.append(f"{str(data['minutes']).strip()} min")
+        temps = []
+        if str(temp or "").strip():
+            temps.append(f"{str(temp).strip()}°{sym}")
+        if str(fan or "").strip():
+            temps.append(f"{str(fan).strip()}°{sym} fan")
+        if temps:
+            parts.append("@ " + " / ".join(temps))
+        cook_lines = [t for t in (heading, "  ".join(parts)) if t]
+        if cook_lines:
+            size = fit_size(cook_lines, "sans", 40, usable)
+            for i, t in enumerate(cook_lines):
+                lines.append({"text": t, "role": "sans-bold" if i == 0 and heading else "sans",
+                              "size": size, "align": "center", "gap": 14 if i == 0 else 0})
     notes = [l.strip() for l in (data.get("notes") or "").splitlines() if l.strip()]
     if notes:
         size = fit_size(notes, "cond", 34, usable)
@@ -366,15 +486,172 @@ def freezer(data):
     return draw_lines(lines)
 
 
+# ---------------------------------------------------------------- flights
+# A flight ("leg") is a dict:
+#   date "YYYY-MM-DD", flight "XX 0123", from "AAA", to "BBB",
+#   dep "HH:MM", arr "HH:MM", plus1 (True if it lands the next day).
+# Legs are sorted by departure, and a gap of more than a day between one
+# landing and the next take-off starts a new journey (a blank line).
+MAX_LEGS = 30
+_MONTHS = {m: i for i, m in enumerate(
+    ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"], 1)}
+
+
+def _leg_date(leg):
+    """The leg's departure date, or None if it's missing or invalid."""
+    try:
+        return datetime.strptime(str(leg.get("date") or "")[:10], "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def _hhmm(value):
+    """'09:05' or '0905' -> '0905' (24-hour clock); anything else -> ''."""
+    digits = re.sub(r"\D", "", str(value or ""))
+    return digits.zfill(4) if len(digits) in (3, 4) else ""
+
+
+def clean_legs(legs):
+    """Keep only well-formed legs (with a valid date), tidied, sorted by departure."""
+    out = []
+    for leg in (legs if isinstance(legs, list) else [])[:MAX_LEGS]:
+        if not isinstance(leg, dict) or not _leg_date(leg):
+            continue
+        out.append({
+            "date": _leg_date(leg).isoformat(),
+            "flight": re.sub(r"\s+", " ", str(leg.get("flight") or "").strip().upper()),
+            "from": str(leg.get("from") or "").strip().upper(),
+            "to": str(leg.get("to") or "").strip().upper(),
+            "dep": _hhmm(leg.get("dep")),
+            "arr": _hhmm(leg.get("arr")),
+            "plus1": bool(leg.get("plus1")),
+        })
+    return sorted(out, key=lambda l: (l["date"], l["dep"]))
+
+
+def format_legs(legs):
+    """Lines for the label, one per flight, with "" between journeys.
+
+    Each line follows the template '1 Mar 0900-1130, XX 0123, AAA-BBB'
+    ('+1' after the arrival time when it lands the next day).
+    """
+    lines, last_arrival = [], None
+    for leg in clean_legs(legs):
+        d = _leg_date(leg)
+        if last_arrival and (d - last_arrival).days > 1:
+            lines.append("")                     # a break: next journey
+        when = f"{d.day} {d.strftime('%b')}"
+        times = "-".join(t for t in (leg["dep"], leg["arr"]) if t)
+        if times and leg["plus1"]:
+            times += "+1"
+        route = "-".join(t for t in (leg["from"], leg["to"]) if t)
+        first = " ".join(t for t in (when, times) if t)
+        lines.append(", ".join(t for t in (first, leg["flight"], route) if t))
+        last_arrival = d + timedelta(days=1 if leg["plus1"] else 0)
+    return lines
+
+
+def parse_flights(text, reference=None):
+    """Read flights pasted as text, one per line. Returns (legs, unread lines).
+
+    Understands the label template ('1 Mar 0900-1130, XX 0123, AAA-BBB')
+    and similar: dates like '1 March', '1 Mar 2027', '01/03/2027' or
+    '2027-03-01'; times '0900' or '09:00', optional '+1'; a flight number
+    (two letters/digits then 1-4 digits); airports as 'AAA-BBB',
+    'AAA > BBB' or 'AAA to BBB'. With no year, the next date on or after
+    two months ago is used (so a trip just finished still gets this year).
+    """
+    reference = reference or today()
+    legs, unread = [], []
+    for raw in (text or "").splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        d, span = _find_date(line, reference)
+        times = re.findall(r"(?<!\d)([01]?\d|2[0-3]):?([0-5]\d)(?!\d)", _strip_date(line, span))
+        route = re.search(r"\b([A-Z]{3})\s*(?:-|–|>|→|to)\s*([A-Z]{3})\b", line, re.I)
+        flight = re.search(r"\b([A-Z]{2}|[A-Z]\d|\d[A-Z])\s?(\d{1,4})\b(?!\s*:)", line.upper())
+        if not d or not (times or route):
+            unread.append(raw)
+            continue
+        dep = f"{times[0][0].zfill(2)}{times[0][1]}" if times else ""
+        arr = f"{times[1][0].zfill(2)}{times[1][1]}" if len(times) > 1 else ""
+        legs.append({
+            "date": d.isoformat(),
+            "flight": f"{flight.group(1)} {flight.group(2)}" if flight else "",
+            "from": route.group(1).upper() if route else "",
+            "to": route.group(2).upper() if route else "",
+            "dep": dep, "arr": arr,
+            # "+1", or landing earlier in the day than take-off
+            "plus1": bool(re.search(r"\+\s?1", line)) or bool(dep and arr and arr < dep),
+        })
+    return clean_legs(legs), unread
+
+
+# An optional year after "1 Mar": 19xx/20xx, but not when it's really the
+# start of a time range ("1 Mar 2030-2245" is a time, not the year 2030)
+_YEAR = r"(?:\s+((?:19|20)\d{2})(?!\d|\s*[-–:]))?\b"
+
+
+def _find_date(line, reference):
+    """The first date in a line of text and where it is: (date, (start, end)).
+
+    Returns (None, None) if there's no date (see parse_flights for formats).
+    """
+    m = re.search(r"\b(\d{4})-(\d{2})-(\d{2})\b", line)
+    if m:
+        return _safe_date(int(m.group(1)), int(m.group(2)), int(m.group(3))), m.span()
+    m = re.search(r"\b(\d{1,2})/(\d{1,2})(?:/(\d{2,4}))?\b", line)   # UK: day/month
+    if m:
+        return _with_year(int(m.group(1)), int(m.group(2)), m.group(3), reference), m.span()
+    for m in re.finditer(r"\b(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]{3,9})\.?" + _YEAR, line):
+        if m.group(2)[:3].lower() in _MONTHS:      # a real month name, not "LGW"
+            return _with_year(int(m.group(1)), _MONTHS[m.group(2)[:3].lower()], m.group(3), reference), m.span()
+    return None, None
+
+
+def _strip_date(line, span):
+    """The line without its date (and flight number), so their digits aren't read as times."""
+    if span:
+        line = line[:span[0]] + " " + line[span[1]:]
+    return re.sub(r"\b([A-Za-z]{2}|[A-Za-z]\d|\d[A-Za-z])\s?\d{1,4}\b", " ", line)
+
+
+def _with_year(day, month, year, reference):
+    """Build a date; a missing year means the next one on/after 2 months ago."""
+    if year:
+        y = int(year)
+        return _safe_date(y + 2000 if y < 100 else y, month, day)
+    for y in (reference.year, reference.year + 1):
+        d = _safe_date(y, month, day)
+        if d and d >= reference - timedelta(days=61):
+            return d
+    return None
+
+
+def _safe_date(year, month, day):
+    """A date, or None if the numbers don't make one (e.g. 31 Feb)."""
+    try:
+        return date(year, month, day)
+    except ValueError:
+        return None
+
+
 def travel(data):
     """
-    Travel label: name, address, phone, then the flights exactly as typed
-    (blank lines between journeys are kept). Monospaced so times line up.
-    data: name, address, phone, flights (multi-line)
+    Travel label: name, address, phone, then the flights. Monospaced so
+    times line up.
+    data: name, address, phone, and either
+          legs    - a list of flights (see above): sorted, formatted with
+                    the template and split into journeys automatically, or
+          flights - text exactly as typed (blank lines between journeys).
     """
     header = [data.get("name", ""), data.get("address", ""), data.get("phone", "")]
     header = [h.strip() for h in header if h and h.strip()]
-    flights = (data.get("flights") or "").rstrip().splitlines()
+    if data.get("legs"):
+        flights = format_legs(data["legs"])
+    else:
+        flights = (data.get("flights") or "").rstrip().splitlines()
     every = header + [f for f in flights if f.strip()]
     size = fit_size(every, "mono", 36, WIDTH - 2 * SIDE, minimum=16)
     lh = line_height("mono", size, 1.15)
@@ -437,7 +714,8 @@ def network(data):
     return draw_lines(lines)
 
 
-RENDERERS = {"address": address, "freezer": freezer, "travel": travel,
+# "freezer" is the old name of the food label, kept for existing API callers
+RENDERERS = {"address": address, "food": food, "freezer": food, "travel": travel,
              "battery": battery, "network": network}
 
 
@@ -447,18 +725,21 @@ RENDERERS = {"address": address, "freezer": freezer, "travel": travel,
 MIN_LENGTH = 150
 
 
-def render(kind, data, tz="UTC", min_length=MIN_LENGTH):
+def render(kind, data, tz="UTC", min_length=MIN_LENGTH, temp_unit="C"):
     """Render a label of the given kind. Raises KeyError for an unknown kind.
 
     tz:         IANA time zone name (e.g. "Europe/London") used for "today".
+    temp_unit:  "C" or "F", for cooking temperatures on food labels.
     min_length: shortest label the chosen printer model accepts, in dots;
                 shorter labels are padded top and bottom to this length.
     """
     token = _tz.set(tz or "UTC")
+    unit_token = _unit.set("F" if temp_unit == "F" else "C")
     try:
         img = RENDERERS[kind](data or {})
     finally:
         _tz.reset(token)
+        _unit.reset(unit_token)
     min_length = max(MIN_LENGTH, int(min_length or MIN_LENGTH))
     if img.height < min_length:
         padded = Image.new("L", (img.width, min_length), 255)
