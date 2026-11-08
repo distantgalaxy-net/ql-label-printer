@@ -1,7 +1,7 @@
 <!doctype html>
 <!--
   labelprinter - label printing page (phone-first)
-  Date: 2026-11-09 00:40 GMT (updated; first written 2026-11-07 18:15 GMT)
+  Date: 2026-11-09 01:20 GMT (updated; first written 2026-11-07 18:15 GMT)
   Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
   One form per label type; the preview updates as you type, then Print.
   The Settings tab holds the printer (model, IP address, port), the time
@@ -558,21 +558,23 @@ async function canPickAddresses() {
   try { return (await navigator.contacts.getProperties()).includes("address"); }
   catch (e) { return false; }
 }
-// Show the button where it works, or a short hint explaining why not
+// Show the button where it works, or a short message saying why not,
+// based on the device type and whether the page arrived over HTTPS:
+//   phone/tablet, not secure  -> needs a secure connection
+//   computer, not secure      -> needs a secure connection and a phone
+//   computer, secure          -> needs a phone
+//   phone/tablet, secure, but the browser has no picker -> which browser
 async function setUpContacts() {
   const ok = await canPickAddresses(), device = deviceKind(), note = $("c-note");
+  const secure = window.isSecureContext, phone = device !== "computer";
   $("c-row").hidden = !ok;
   note.hidden = ok;
   if (ok) return;
-  if (device === "android" && !window.isSecureContext) {
-    note.textContent = "To choose an address from your contacts, open this page with an https:// address (for example through your NAS's reverse proxy with a certificate). Phones only allow it on secure pages.";
-  } else if (device === "android") {
-    note.textContent = "Choosing from contacts needs Chrome on Android.";
-  } else if (device === "ios") {
-    note.textContent = "Safari on iPhone can only choose contacts if its Contact Picker feature flag is switched on (Settings → Apps → Safari → Advanced → Feature Flags). Otherwise, type the address in.";
-  } else {
-    note.textContent = "On an Android phone you can choose an address straight from your contacts.";
-  }
+  if (phone && !secure) note.textContent = "Contact picker only available via a secure connection.";
+  else if (!phone && !secure) note.textContent = "Contact picker only available via a secure connection using an Apple or Android device.";
+  else if (!phone) note.textContent = "Contact picker only available via an Apple or Android device.";
+  else if (device === "android") note.textContent = "Contact picker only available in Chrome on Android.";
+  else note.textContent = "Contact picker only available in Safari with its Contact Picker feature flag switched on (Settings → Apps → Safari → Advanced → Feature Flags).";
 }
 // Turn one contact address into label lines: street lines first, then
 // locality, town, county/region, postcode and country, skipping blanks and

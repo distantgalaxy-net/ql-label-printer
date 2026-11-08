@@ -3,7 +3,7 @@
 Read this before changing the code. It explains what we're building, the decisions already made
 and the constraints that aren't obvious from the code.
 
-_Last updated: 2026-11-09 00:50 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Last updated: 2026-11-09 01:20 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 ---
 
@@ -48,8 +48,12 @@ AB1 2CD", `192.168.1.20`, `labels.home.example`).
   (`navigator.contacts.select(["name","address"])`), all in the page – no
   server code, nothing stored. Shown only when the API exists, the page is
   a secure context (HTTPS or localhost) and `address` is supported;
-  otherwise a hint chosen by device type (Android over HTTP → needs HTTPS;
-  iPhone → Safari feature flag; computer → use a phone). Several
+  otherwise a message chosen by device type and `isSecureContext`
+  (phone over HTTP → needs a secure connection; computer over HTTP →
+  needs a secure connection and a phone; computer over HTTPS → needs a
+  phone; phone over HTTPS without a picker → Chrome on Android / Safari
+  feature flag). The browser sees the HTTPS hop to the reverse proxy, so
+  the plain-HTTP hop inside the NAS doesn't matter. Several
   addresses → the user picks one (no default). Tested with a stand-in
   picker only; Android Chrome is the target, iPhone untested.
 - **Print** sits directly under the label preview (no fixed bottom bar),
