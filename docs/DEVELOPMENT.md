@@ -3,7 +3,7 @@
 Read this before changing the code. It explains what we're building, the decisions already made
 and the constraints that aren't obvious from the code.
 
-_Last updated: 2026-11-08 22:15 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Last updated: 2026-11-08 22:45 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 ---
 
@@ -36,8 +36,10 @@ AB1 2CD", `192.168.1.20`, `labels.home.example`).
   `docker-compose.yml` only holds the web port.
 - **User data** (details, food presets, trips, custom icons) lives only in
   `/data`. Never put any of it in the repo or the image.
+- **Print** sits directly under the label preview (no fixed bottom bar),
+  so what you see and the button are together.
 - **Messages** appear next to the button that caused them (`say()` in
-  `index.html`, one `.msg` box per action; Print results in the Print bar).
+  `index.html`, one `.msg` box per action).
 - New installs are locked to Settings until **Test and save** connects to
   the printer (`printer.verified`) and a time zone is chosen; `/api/print`
   returns 409 until then. Later saves re-test only if the address changes.
@@ -114,7 +116,11 @@ Dockerfile, .dockerignore, docker-compose.yml, requirements.txt (pinned)
 .github/workflows/docker-publish.yml   Docker Hub build (multi-arch)
 ```
 
-Flights: `labels.clean_legs` / `format_legs` / `parse_flights`. The label
+Flights: `labels.clean_legs` / `format_legs` / `parse_flight`. Pasting
+fills the flight boxes for the user to check (one flight at a time);
+`parse_flight` looks for each part separately (date, flight number,
+bracketed airport codes, "Departure"/"Arrival" times), so booking emails
+in any layout work. The label
 template is `1 Mar 0900-1130, XX 0123, AAA-BBB` (`+1` after a next-day
 arrival); a gap of more than a day between landing and the next take-off
 starts a new journey. The page mirrors this for its list.
@@ -181,6 +187,9 @@ image is valid for a model (it raises if the size is wrong).
 - 2026-11-08 – Travel flights entered as structured legs (or pasted text)
   and formatted by the server; trips saved in settings, the current
   flights also kept in the browser's localStorage as a draft.
+- 2026-11-08 – Print button moved directly under the preview. Pasted
+  flight text no longer has to be one-per-line: any booking layout is
+  read into the flight boxes for checking, then added.
 - 2026-11-08 – Distributed as a Docker Hub image built by GitHub Actions,
   so installs and updates are a download instead of copying code. `data/`
   is excluded from the build context (`.dockerignore`).

@@ -1,6 +1,6 @@
 # ------------------------------------------------------------------
 # labelprinter - label print service (web page + API)
-# Date: 2026-11-08 21:55 GMT (updated; first written 2026-11-07 18:10 GMT)
+# Date: 2026-11-08 22:40 GMT (updated; first written 2026-11-07 18:10 GMT)
 # Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
 #
 # Serves the phone-friendly web page and a small JSON API:
@@ -11,7 +11,7 @@
 #   GET  /api/icons/<name>      a small PNG of one icon (for the page)
 #   POST /api/icons             upload a custom icon (form: name, file)
 #   DELETE /api/icons/<name>    delete a custom icon
-#   POST /api/travel/parse      read flights pasted as text -> legs
+#   POST /api/travel/parse      pick a flight out of pasted text -> leg
 #   POST /api/preview/<kind>    PNG preview of a label
 #   POST /api/print/<kind>      print it  -> {"ok": bool, "message": str}
 #   POST /api/printer/test      check the printer can be reached (no print)
@@ -335,15 +335,19 @@ def too_large(_err):
 
 @app.post("/api/travel/parse")
 def travel_parse():
-    """Read flights pasted as text. Body {"text": ...} -> {"legs", "unread"}.
+    """Pick one flight out of pasted text (e.g. a booking confirmation).
 
+    Body {"text": ...} -> {"ok", "leg", "missing", "more"}; the page fills
+    its flight boxes with "leg" so the user can check it before adding.
     Years left out of dates are filled in using today's date in the
     Settings time zone.
     """
     text = (request.get_json(silent=True) or {}).get("text") or ""
     ref = labels.today(load_settings().get("timezone") or "UTC")
-    legs, unread = labels.parse_flights(str(text)[:5000], reference=ref)
-    return jsonify({"ok": True, "legs": legs, "unread": unread})
+    leg, missing, more = labels.parse_flight(str(text)[:20000], reference=ref)
+    if not leg:
+        return jsonify({"ok": False, "message": "Couldn't find a flight in that text. Check it has a date, a flight number, airports or times."}), 400
+    return jsonify({"ok": True, "leg": leg, "missing": missing, "more": more})
 
 
 def _render_from_request(kind):

@@ -3,7 +3,7 @@
 Print useful labels on a Brother QL label printer from your phone or from
 Home Assistant.
 
-_Updated: 2026-11-08 22:15 GMT · Developer: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Updated: 2026-11-08 22:45 GMT · Developer: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 A small self-hosted web service, run in Docker (for example on a Synology
 NAS). It prints on a network-connected Brother QL printer from a
@@ -138,7 +138,9 @@ Then, if you like:
 - **Travel flights:** add flights one at a time (date picker, airports you've
   already used are suggested, the next flight starts on the day the last
   one landed, **+1** is ticked for you when it lands at an earlier clock
-  time) or paste them as text. They're sorted by date, and a gap of more
+  time). Or open **Fill in from your booking**, paste one flight copied
+  from your confirmation email or itinerary (any layout), and the boxes
+  are filled in for you to check before tapping **Add flight**. They're sorted by date, and a gap of more
   than a day starts a new journey on the label. **Save trip** keeps the
   whole set to load again later; the flights on the page are also
   remembered in your browser.
@@ -148,8 +150,8 @@ Then, if you like:
 - **Address tab → Your own icons:** upload a picture; it's converted to a
   black-and-white square. Delete it there too.
 
-Messages appear right next to the button you pressed (Print results in the
-Print bar).
+The **Print** button sits directly under the label preview. Messages
+appear right next to the button you pressed.
 
 Everything is saved in the `data/` folder (never in this repo or the
 published image), so it survives updates and is included in your backups.
@@ -269,7 +271,7 @@ data:
 | `GET /api/icons/<name>` | Small PNG of an icon |
 | `POST /api/icons` | Upload a custom icon (multipart form: `name`, `file`) |
 | `DELETE /api/icons/<name>` | Delete a custom icon |
-| `POST /api/travel/parse` | Read flights pasted as text: `{"text": "…"}` → `{"legs": […], "unread": […]}` |
+| `POST /api/travel/parse` | Pick one flight out of pasted text: `{"text": "…"}` → `{"leg": {…}, "missing": […], "more": true/false}` |
 | `POST /api/login`, `POST /api/logout`, `PUT /api/password` | Optional password: log in/out; set, change or remove (`{"current": "…", "new": "…"}`, empty `new` removes) |
 
 If a password is set, every call except `/api/login` and `/health` needs a

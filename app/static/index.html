@@ -1,7 +1,7 @@
 <!doctype html>
 <!--
   labelprinter - label printing page (phone-first)
-  Date: 2026-11-08 22:10 GMT (updated; first written 2026-11-07 18:15 GMT)
+  Date: 2026-11-08 22:40 GMT (updated; first written 2026-11-07 18:15 GMT)
   Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
   One form per label type; the preview updates as you type, then Print.
   The Settings tab holds the printer (model, IP address, port), the time
@@ -9,8 +9,8 @@
   are built into the page or the image. Until the printer has been saved
   with a successful connection test (and a time zone chosen), only the
   Settings tab works.
-  Messages appear right next to the button that was pressed (and Print
-  messages in the Print bar), so they can't be missed.
+  The Print button sits directly under the label preview, and messages
+  appear right next to the button that was pressed, so they can't be missed.
   An optional password (Settings tab) protects the page; if one is set and
   the login has expired, any API call answers 401 and we go to /login.
   Everything saved (presets, details, trips, icons) lives on the server in
@@ -37,7 +37,7 @@
   * { box-sizing: border-box; }
   html, body { margin: 0; background: var(--bg); color: var(--fg);
     font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-  .wrap { max-width: 560px; margin: 0 auto; padding: 14px 16px calc(150px + env(safe-area-inset-bottom)); }
+  .wrap { max-width: 560px; margin: 0 auto; padding: 14px 16px calc(24px + env(safe-area-inset-bottom)); }
   h1 { font-size: 1.25rem; margin: 4px 0 12px; }
   .top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
   nav { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 12px; }
@@ -96,14 +96,11 @@
   .list li.break { border: 0; background: none; padding: 0 8px; color: var(--muted); font-size: .8rem; }
   .legtext { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: .85rem; }
   .summary { margin: 0; white-space: pre-line; color: var(--fg); }
-  .bar { position: fixed; left: 0; right: 0; bottom: 0; background: var(--card); border-top: 1px solid var(--line);
-    padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); }
-  .bar .in { max-width: 560px; margin: 0 auto; display: grid; gap: 8px; }
-  .bar .buttons { display: flex; gap: 10px; align-items: center; }
-  .bar input { width: 70px; text-align: center; }
-  .bar button { flex: 1; font: inherit; font-weight: 600; border: 0; border-radius: 10px; padding: 12px;
+  .printrow { display: flex; gap: 10px; align-items: center; }
+  .printrow input { width: 70px; text-align: center; }
+  .printrow button { flex: 1; font: inherit; font-weight: 600; border: 0; border-radius: 10px; padding: 12px;
     background: var(--accent); color: var(--accent-fg); cursor: pointer; }
-  .bar button:disabled { opacity: .55; }
+  .printrow button:disabled { opacity: .55; }
   [hidden] { display: none !important; }
   button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 </style>
@@ -124,6 +121,12 @@
     <div class="paper"><img id="preview" alt="Label preview"></div>
     <p class="small" id="length"></p>
     <p class="msg" id="msg-preview" role="status"></p>
+    <!-- Print sits right under the preview, so you print what you see -->
+    <div class="printrow">
+      <input id="copies" type="number" min="1" max="20" value="1" aria-label="Copies" inputmode="numeric">
+      <button id="print" type="button">Print</button>
+    </div>
+    <p class="msg" id="msg-print" role="status"></p>
   </div>
 
   <div class="card">
@@ -224,6 +227,13 @@
         <!-- One flight at a time; airports used already are suggested -->
         <div class="group" id="t-leg-form">
           <h3 id="t-leg-title">Add a flight</h3>
+          <details id="t-paste-box">
+            <summary>Fill in from your booking (paste)</summary>
+            <p class="small">Copy one flight from your booking confirmation or itinerary, any layout, and paste it here. The boxes below are filled in for you to check before you tap <strong>Add flight</strong>.</p>
+            <textarea id="t-paste" placeholder="e.g. Monday, 24 August 2026 · XX 95 · Anytown (AAA) → Otherville (BBB) · Departure 18:05 · Arrival 20:15"></textarea>
+            <div class="actions"><button type="button" class="btn2 primary" id="t-paste-fill">Fill in the boxes</button></div>
+            <p class="msg" id="msg-paste" role="status"></p>
+          </details>
           <div class="row">
             <label>Date<input id="l-date" type="date"></label>
             <label>Flight number<input id="l-flight" autocomplete="off" placeholder="XX 0123" spellcheck="false"></label>
@@ -244,14 +254,6 @@
           <p class="msg" id="msg-legs" role="status"></p>
         </div>
         <datalist id="airports"></datalist>
-
-        <details>
-          <summary>Paste flights as text</summary>
-          <p class="small">One flight per line, e.g. <code>1 Mar 0900-1130, XX 0123, AAA-BBB</code>. Dates like 1 March, 01/03/2027 or 2027-03-01 work; add +1 for next-day arrivals.</p>
-          <textarea id="t-paste" class="mono" placeholder="1 Mar 0900-1130, XX 0123, AAA-BBB&#10;8 Mar 1400-1630, XX 0456, BBB-AAA"></textarea>
-          <div class="actions"><button type="button" class="btn2 primary" id="t-paste-add">Add these flights</button></div>
-          <p class="msg" id="msg-paste" role="status"></p>
-        </details>
 
         <div class="row">
           <label>Trip name<input id="t-trip-name" maxlength="60" autocomplete="off" placeholder="e.g. Summer holiday"></label>
@@ -287,7 +289,7 @@
       <label>Notes (optional)<textarea id="n-notes" name="notes" style="min-height:60px"></textarea></label>
     </form>
 
-    <!-- Settings: not a label, so the preview and Print bar are hidden on this tab -->
+    <!-- Settings: not a label, so the preview and Print button are hidden on this tab -->
     <form data-kind="settings" hidden>
       <p class="info" id="s-welcome" hidden><strong>Welcome!</strong> Set up your printer to get started. Tap <strong>Test and save</strong>: it checks it can reach the printer, then unlocks the label tabs.</p>
       <h2>Printer</h2>
@@ -329,16 +331,6 @@
       </div>
       <p class="msg" id="msg-pw" role="status"></p>
     </form>
-  </div>
-</div>
-
-<div class="bar" id="print-bar">
-  <div class="in">
-    <p class="msg" id="msg-print" role="status"></p>
-    <div class="buttons">
-      <input id="copies" type="number" min="1" max="20" value="1" aria-label="Copies" inputmode="numeric">
-      <button id="print" type="button">Print</button>
-    </div>
   </div>
 </div>
 
@@ -416,7 +408,7 @@ function say(id, text, cls = "ok") {
   el.textContent = text || "";
   el.className = `msg ${text ? cls : ""}`;
   if (!text) return;
-  if (id !== "msg-print") el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  el.scrollIntoView({ block: "nearest", behavior: "smooth" });
   if (cls === "ok") msgTimers[id] = setTimeout(() => say(id, ""), 8000);
 }
 // Clear every message (e.g. when changing tab)
@@ -437,7 +429,7 @@ function setLocked(value) {
 }
 
 // Show one tab's form. The Settings tab isn't a label, so it hides the
-// preview and the Print bar and skips the preview request.
+// preview (with its Print button) and skips the preview request.
 function showTab(k) {
   if (k === "freezer") k = "food";           // old name, from a saved last tab
   if (!document.querySelector(`form[data-kind="${k}"]`)) k = "address";
@@ -447,7 +439,6 @@ function showTab(k) {
   document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.kind === k)));
   document.querySelectorAll("form[data-kind]").forEach(f => f.hidden = f.dataset.kind !== k);
   $("preview-box").hidden = isSettings;
-  $("print-bar").hidden = isSettings;
   try { localStorage.setItem("labelprinter-tab", k); } catch (e) {}
   clearMessages();
   if (!isSettings) schedulePreview(0);
@@ -480,7 +471,7 @@ document.querySelectorAll("form").forEach(f => {
 });
 
 // ---- print -------------------------------------------------------
-// The result is shown in the Print bar itself, right above the button
+// The result is shown right under the Print button
 $("print").addEventListener("click", async () => {
   const btn = $("print");
   btn.disabled = true; btn.textContent = "Printing…"; say("msg-print", "");
@@ -781,22 +772,23 @@ $("l-add").addEventListener("click", () => {
   $("l-date").value = arrivalDate(just); $("l-from").value = just.to;
   say("msg-legs", updated ? "Flight updated" : `Added ${legText(just)}`, "ok");
 });
-// Paste: the server reads the text and returns flights (and lines it couldn't read)
-$("t-paste-add").addEventListener("click", async () => {
+// Paste: the server picks the flight out of the text and we fill in the
+// boxes, so the user checks (and corrects) it before tapping Add flight
+$("t-paste-fill").addEventListener("click", async () => {
   const text = $("t-paste").value;
-  if (!text.trim()) { say("msg-paste", "Paste some flights first", "bad"); return; }
+  if (!text.trim()) { say("msg-paste", "Paste your flight details first", "bad"); return; }
   const res = await api("POST", "/api/travel/parse", { text });
   if (!res.ok) { say("msg-paste", res.body.message || "Couldn't read that", "bad"); return; }
-  const found = res.body.legs.map(l => ({ ...l, dep: hhmm(l.dep), arr: hhmm(l.arr) }));
-  legs.push(...found); showLegs(); resetLegForm();
-  const unread = res.body.unread || [];
-  if (unread.length) {
-    $("t-paste").value = unread.join("\n");
-    say("msg-paste", `Added ${found.length} flight${found.length === 1 ? "" : "s"}. Couldn't read ${unread.length} line${unread.length === 1 ? "" : "s"} (left in the box): check each has a date and times or airports.`, found.length ? "info" : "bad");
-  } else {
-    $("t-paste").value = "";
-    say("msg-paste", `Added ${found.length} flight${found.length === 1 ? "" : "s"}`, "ok");
-  }
+  const l = res.body.leg;
+  if (l.date) $("l-date").value = l.date;
+  $("l-flight").value = l.flight || ""; $("l-from").value = l.from || ""; $("l-to").value = l.to || "";
+  $("l-dep").value = toTime(l.dep); $("l-arr").value = toTime(l.arr); $("l-plus1").checked = Boolean(l.plus1);
+  $("t-paste").value = "";
+  let note = "Filled in below – check the details, then tap Add flight.";
+  if (res.body.missing.length) note += ` Couldn't find: ${res.body.missing.join(", ")}.`;
+  if (res.body.more) note += " The text seemed to hold more than one flight: this is the first, so paste the others one at a time.";
+  say("msg-paste", note, res.body.missing.length || res.body.more ? "info" : "ok");
+  $("l-add").scrollIntoView({ block: "nearest", behavior: "smooth" });
 });
 
 // ---- Travel tab: saved trips ---------------------------------------------------

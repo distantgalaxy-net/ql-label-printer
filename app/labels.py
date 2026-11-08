@@ -1,6 +1,6 @@
 # ------------------------------------------------------------------
 # labelprinter - label layouts
-# Date: 2026-11-08 21:55 GMT (updated; first written 2026-11-07 18:10 GMT)
+# Date: 2026-11-08 22:40 GMT (updated; first written 2026-11-07 18:10 GMT)
 # Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
 #
 # Turns form data into a black-and-white image the exact width of the
@@ -18,7 +18,7 @@
 # Also here: custom icon upload/delete (pictures are converted to
 # black-and-white squares and saved in /data/icons, never in the image),
 # and the flight helpers for travel labels (format, sort, split into
-# journeys, and read flights pasted as text).
+# journeys, and pick a flight out of pasted booking text).
 # ------------------------------------------------------------------
 import contextvars
 import os
@@ -551,41 +551,81 @@ def format_legs(legs):
     return lines
 
 
-def parse_flights(text, reference=None):
-    """Read flights pasted as text, one per line. Returns (legs, unread lines).
+# Flight number: airline code (two letters, or a letter and a digit) then
+# 1-4 digits, e.g. "BA 95", "U2 1234". Capitals only and not part of a
+# longer word, so ordinary words and times aren't mistaken for one.
+_FLIGHT = r"(?<![A-Za-z0-9])([A-Z]{2}|[A-Z][0-9]|[0-9][A-Z])\s?([0-9]{1,4})(?![0-9:.])"
+# A clock time such as 18:05 or 18.05 (not part of a date like 24.08.2026)
+_TIME = r"(?<![\d:.])([01]?\d|2[0-3])[:.]([0-5]\d)(?![\d:.])"
 
-    Understands the label template ('1 Mar 0900-1130, XX 0123, AAA-BBB')
-    and similar: dates like '1 March', '1 Mar 2027', '01/03/2027' or
-    '2027-03-01'; times '0900' or '09:00', optional '+1'; a flight number
-    (two letters/digits then 1-4 digits); airports as 'AAA-BBB',
-    'AAA > BBB' or 'AAA to BBB'. With no year, the next date on or after
-    two months ago is used (so a trip just finished still gets this year).
+
+def parse_flight(text, reference=None):
+    """Pick out one flight from pasted text, e.g. a booking confirmation.
+
+    The text can be laid out any way: the date, flight number, airports
+    and times are each looked for separately, so a block copied from an
+    email or a travel agent's page works as well as the label template
+    ('1 Mar 0900-1130, XX 0123, AAA-BBB').
+      date     first date found ('Monday, 24 August 2026', '24 Aug',
+               'August 24, 2026', '24/08/2026', '2026-08-24')
+      flight   after the word "Flight" if present, else the first one found
+      airports codes in brackets ('London (LHR)'), else 'LHR-YUL' /
+               'LHR to YUL', else codes on lines of their own
+      times    after "Departure"/"Arrival" if labelled, else the first two
+               clock times, else '0900-1130'
+      +1       '+1' in the text, or landing at an earlier clock time
+    Returns (leg, missing, more): leg is a dict (see clean_legs) or None if
+    nothing useful was found; missing lists the parts not found; more is
+    True when the text seems to hold more than one flight.
     """
     reference = reference or today()
-    legs, unread = [], []
-    for raw in (text or "").splitlines():
-        line = raw.strip()
-        if not line:
-            continue
-        d, span = _find_date(line, reference)
-        times = re.findall(r"(?<!\d)([01]?\d|2[0-3]):?([0-5]\d)(?!\d)", _strip_date(line, span))
-        route = re.search(r"\b([A-Z]{3})\s*(?:-|–|>|→|to)\s*([A-Z]{3})\b", line, re.I)
-        flight = re.search(r"\b([A-Z]{2}|[A-Z]\d|\d[A-Z])\s?(\d{1,4})\b(?!\s*:)", line.upper())
-        if not d or not (times or route):
-            unread.append(raw)
-            continue
-        dep = f"{times[0][0].zfill(2)}{times[0][1]}" if times else ""
-        arr = f"{times[1][0].zfill(2)}{times[1][1]}" if len(times) > 1 else ""
-        legs.append({
-            "date": d.isoformat(),
-            "flight": f"{flight.group(1)} {flight.group(2)}" if flight else "",
-            "from": route.group(1).upper() if route else "",
-            "to": route.group(2).upper() if route else "",
-            "dep": dep, "arr": arr,
-            # "+1", or landing earlier in the day than take-off
-            "plus1": bool(re.search(r"\+\s?1", line)) or bool(dep and arr and arr < dep),
-        })
-    return clean_legs(legs), unread
+    text = (text or "").replace("&nbsp;", " ").replace("&nbsp", " ").replace("\u00a0", " ")
+    d, span = _find_date(text, reference)
+    rest = text[:span[0]] + " " + text[span[1]:] if span else text
+
+    # Flight number: prefer one labelled "Flight"
+    codes = [f"{m.group(1)} {m.group(2)}" for m in re.finditer(_FLIGHT, rest)]
+    labelled = re.search(r"flight\s*(?:no\.?|number)?\s*:?\s*" + _FLIGHT, rest, re.I)
+    flight = f"{labelled.group(1)} {labelled.group(2)}" if labelled else (codes[0] if codes else "")
+
+    # Airports
+    origin = dest = ""
+    bracketed = []
+    for code in re.findall(r"\(([A-Z]{3})\)", rest):
+        if code not in bracketed:
+            bracketed.append(code)
+    route = re.search(r"(?<![A-Za-z])([A-Z]{3})\s*(?:-|–|>|→|\bto\b)\s*([A-Z]{3})(?![A-Za-z])", rest)
+    alone = re.findall(r"^\s*([A-Z]{3})\s*$", rest, re.M)
+    if len(bracketed) >= 2:
+        origin, dest = bracketed[0], bracketed[1]
+    elif route:
+        origin, dest = route.group(1), route.group(2)
+    elif len(alone) >= 2:
+        origin, dest = alone[0], alone[1]
+
+    # Times: labelled first, then any clock times, then '0900-1130'
+    def labelled_time(word):
+        m = re.search(word + r"[a-z]*\b[^0-9\n]{0,25}?" + _TIME, rest, re.I)
+        return f"{m.group(1).zfill(2)}{m.group(2)}" if m else ""
+    dep, arr = labelled_time("depart"), labelled_time("arriv")
+    if not dep and not arr:
+        clock = re.findall(_TIME, rest)
+        if clock:
+            dep = f"{clock[0][0].zfill(2)}{clock[0][1]}"
+            arr = f"{clock[1][0].zfill(2)}{clock[1][1]}" if len(clock) > 1 else ""
+        else:
+            m = re.search(r"(?<!\d)(\d{4})\s*[-–]\s*(\d{4})(?!\d)", rest)
+            if m and int(m.group(1)[:2]) < 24 and int(m.group(2)[:2]) < 24:
+                dep, arr = m.group(1), m.group(2)
+    plus1 = bool(re.search(r"\+\s?1(?!\d)", rest)) or bool(dep and arr and arr < dep)
+
+    if not (d or flight or origin or dep):
+        return None, [], False
+    leg = {"date": d.isoformat() if d else "", "flight": flight, "from": origin, "to": dest,
+           "dep": dep, "arr": arr, "plus1": plus1}
+    missing = [name for name, value in (("date", d), ("flight number", flight), ("airports", origin),
+                                        ("departure time", dep), ("arrival time", arr)) if not value]
+    return leg, missing, len(set(codes)) > 1
 
 
 # An optional year after "1 Mar": 19xx/20xx, but not when it's really the
@@ -594,9 +634,9 @@ _YEAR = r"(?:\s+((?:19|20)\d{2})(?!\d|\s*[-–:]))?\b"
 
 
 def _find_date(line, reference):
-    """The first date in a line of text and where it is: (date, (start, end)).
+    """The first date in some text and where it is: (date, (start, end)).
 
-    Returns (None, None) if there's no date (see parse_flights for formats).
+    Returns (None, None) if there's no date (see parse_flight for formats).
     """
     m = re.search(r"\b(\d{4})-(\d{2})-(\d{2})\b", line)
     if m:
@@ -607,14 +647,11 @@ def _find_date(line, reference):
     for m in re.finditer(r"\b(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]{3,9})\.?" + _YEAR, line):
         if m.group(2)[:3].lower() in _MONTHS:      # a real month name, not "LGW"
             return _with_year(int(m.group(1)), _MONTHS[m.group(2)[:3].lower()], m.group(3), reference), m.span()
+    # US order: "August 24, 2026" / "Aug 24"
+    for m in re.finditer(r"\b([A-Za-z]{3,9})\.?\s+(\d{1,2})(?:st|nd|rd|th)?\b,?" + _YEAR, line):
+        if m.group(1)[:3].lower() in _MONTHS:
+            return _with_year(int(m.group(2)), _MONTHS[m.group(1)[:3].lower()], m.group(3), reference), m.span()
     return None, None
-
-
-def _strip_date(line, span):
-    """The line without its date (and flight number), so their digits aren't read as times."""
-    if span:
-        line = line[:span[0]] + " " + line[span[1]:]
-    return re.sub(r"\b([A-Za-z]{2}|[A-Za-z]\d|\d[A-Za-z])\s?\d{1,4}\b", " ", line)
 
 
 def _with_year(day, month, year, reference):
