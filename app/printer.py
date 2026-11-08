@@ -1,6 +1,6 @@
 # ------------------------------------------------------------------
 # labelprinter - send a rendered label to a Brother QL printer
-# Date: 2026-11-08 16:01 GMT (updated; first written 2026-11-07 18:10 GMT)
+# Date: 2026-11-08 21:55 GMT (updated; first written 2026-11-07 18:10 GMT)
 # Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
 #
 # Uses brother_ql_next (a maintained fork of brother_ql) to turn an
@@ -15,7 +15,6 @@
 # layout is drawn 696 dots wide to fit it.
 # ------------------------------------------------------------------
 import ipaddress
-import os
 import re
 import socket
 import threading
@@ -131,25 +130,6 @@ def test_connection(host, port):
     except OSError as exc:
         return False, _unreachable(host, port, exc)
     return True, f"Connected to the printer at {host}:{port}"
-
-
-def local_address(towards=None):
-    """Best guess at this server's own IP address, or None.
-
-    Asks the operating system which local address it would use to reach
-    `towards` (the printer, if set). A UDP "connect" sends nothing.
-    Also reports whether we're inside Docker, where this is the container's
-    internal address rather than the NAS's.
-    """
-    target = towards or "192.0.2.1"   # a documentation-only address, never used
-    try:
-        family = socket.AF_INET6 if ":" in target else socket.AF_INET
-        with socket.socket(family, socket.SOCK_DGRAM) as s:
-            s.connect((target, 9))
-            ip = s.getsockname()[0]
-    except OSError:
-        ip = None
-    return {"ip": ip, "in_docker": os.path.exists("/.dockerenv")}
 
 
 def print_image(image, host, port=DEFAULT_PORT, model=DEFAULT_MODEL, copies=1):

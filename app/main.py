@@ -1,20 +1,26 @@
 # ------------------------------------------------------------------
 # labelprinter - label print service (web page + API)
-# Date: 2026-11-08 16:01 GMT (updated; first written 2026-11-07 18:10 GMT)
+# Date: 2026-11-08 23:20 GMT (updated; first written 2026-11-07 18:10 GMT)
 # Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
 #
 # Serves the phone-friendly web page and a small JSON API:
 #   GET  /                      web page
+#   GET  /theme.css             accent colours (shared with the login page)
 #   GET  /api/settings          saved details, presets, lists
 #   PUT  /api/settings          save them (whole object)
-#   GET  /api/icons             icon names for address labels
+#   GET  /api/icons             icons for address labels [{name, custom}]
+#   GET  /api/icons/<name>      a small PNG of one icon (for the page)
+#   POST /api/icons             upload a custom icon (form: name, file)
+#   DELETE /api/icons/<name>    delete a custom icon
+#   POST /api/travel/parse      pick a flight out of pasted text -> leg
 #   POST /api/preview/<kind>    PNG preview of a label
 #   POST /api/print/<kind>      print it  -> {"ok": bool, "message": str}
 #   POST /api/printer/test      check the printer can be reached (no print)
-#   GET  /api/options           printer models, time zones, this server's IP
+#   GET  /api/options           printer models and time zones
 #   GET  /login, POST /api/login, POST /api/logout   optional password
 #   PUT  /api/password          set, change or remove the password
-# <kind> is address | freezer | travel | battery | network.
+# <kind> is address | food | travel | battery | network
+# ("freezer" still works as the old name for "food").
 # Home Assistant can call /api/print/<kind> with the same JSON.
 #
 # Optional password (off by default, see auth.py). Without one, keep the
@@ -56,14 +62,26 @@ DEFAULT_SETTINGS = {
     # IANA time zone name (e.g. "Europe/London"); blank until set. Used for
     # "today" on labels; daylight saving changes are applied automatically.
     "timezone": "",
-    "freezer_presets": [],
+    # Cooking temperatures on food labels: "C" (°C) or "F" (°F)
+    "temp_unit": "C",
+    # Page accent colour, one of ACCENTS (chosen in the Settings tab)
+    "accent": "green",
+    # Saved foods: everything on the form except the date
+    "food_presets": [],
+    # Saved trips for travel labels: [{"name": ..., "legs": [...]}]
+    "trips": [],
     "battery_types": ["CR2032", "CR2450", "CR2", "CR123A", "AA", "AAA", "9V"],
 }
+
+# Accent colours the page offers (shades are in static/theme.css)
+ACCENTS = ("green", "blue", "red", "pink", "purple", "orange", "mono")
 
 # Every time zone the container's tz database knows, sorted for the dropdown
 TIMEZONES = sorted(available_timezones())
 
 app = Flask(__name__, static_folder=None)
+# Largest request accepted (icon uploads), in bytes
+app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024
 _settings_lock = threading.Lock()
 
 # ---------------------------------------------------------------- password
@@ -76,9 +94,9 @@ app.config.update(
     PERMANENT_SESSION_LIFETIME=session_lifetime(),
 )
 
-# Paths that work without logging in: the login page itself, the login
-# call, and the Docker health check.
-OPEN_PATHS = {"/login", "/api/login", "/health"}
+# Paths that work without logging in: the login page itself, its colours,
+# the login call, and the Docker health check.
+OPEN_PATHS = {"/login", "/theme.css", "/api/login", "/health"}
 
 
 def logged_in():
@@ -168,6 +186,13 @@ def load_settings():
     merged.update(saved)
     # Older files may lack newer printer fields (e.g. model): fill them in
     merged["printer"] = {**DEFAULT_SETTINGS["printer"], **(saved.get("printer") or {})}
+    # Older files kept freezer presets: carry them over as frozen foods
+    old = merged.pop("freezer_presets", None)
+    if old and not saved.get("food_presets"):
+        merged["food_presets"] = [{**p, "storage": "frozen", "shelf": p.get("months", ""),
+                                   "shelf_unit": "months", "temp": p.get("temp_c", ""),
+                                   "fan": p.get("fan_c", ""), "temp_unit": "C"}
+                                  for p in old if isinstance(p, dict)]
     return merged
 
 
@@ -198,6 +223,12 @@ def save_settings(data):
 def index():
     """The web page."""
     return send_from_directory(STATIC, "index.html")
+
+
+@app.get("/theme.css")
+def theme_css():
+    """Accent colour shades, used by both the main page and the login page."""
+    return send_from_directory(STATIC, "theme.css", mimetype="text/css")
 
 
 @app.get("/labeldesigner")
@@ -242,6 +273,18 @@ def put_settings():
         body["printer"] = {"host": host, "port": port, "model": model, "verified": True}
     if "timezone" in body and body["timezone"] not in TIMEZONES:
         return jsonify({"ok": False, "message": f"'{body['timezone']}' isn't a known time zone."}), 400
+    if "accent" in body and body["accent"] not in ACCENTS:
+        return jsonify({"ok": False, "message": f"'{body['accent']}' isn't one of the colours."}), 400
+    if "temp_unit" in body and body["temp_unit"] not in ("C", "F"):
+        return jsonify({"ok": False, "message": "The temperature unit must be C or F."}), 400
+    for key in ("food_presets", "trips", "battery_types"):
+        if key in body and not isinstance(body[key], list):
+            return jsonify({"ok": False, "message": f"'{key}' must be a list."}), 400
+    if "trips" in body:
+        # Keep saved trips tidy: a name and well-formed flights only
+        body["trips"] = [{"name": str(t.get("name") or "").strip()[:60],
+                          "legs": labels.clean_legs(t.get("legs"))}
+                         for t in body["trips"] if isinstance(t, dict) and str(t.get("name") or "").strip()]
     with _settings_lock:
         merged = load_settings()
         merged.update({k: v for k, v in body.items() if k in DEFAULT_SETTINGS})
@@ -251,24 +294,74 @@ def put_settings():
 
 @app.get("/api/options")
 def options():
-    """Choices for the Settings tab, plus what we can tell about this server.
-
-    server.ip is this machine's address as seen from inside; when running in
-    Docker (bridge network) that's the container's internal address, and the
-    printer will see connections from the NAS's own IP instead.
-    """
-    host = load_settings()["printer"].get("host") or None
-    return jsonify({
-        "models": printer.supported_models(),
-        "timezones": TIMEZONES,
-        "server": {**printer.local_address(host), "port": int(os.environ.get("PORT", "8013"))},
-    })
+    """Choices for the Settings tab: printer models and time zone names."""
+    return jsonify({"models": printer.supported_models(), "timezones": TIMEZONES})
 
 
 @app.get("/api/icons")
 def icons():
-    """List the icon names available for address labels."""
+    """List the icons available for address labels: [{name, custom}]."""
     return jsonify(labels.list_icons())
+
+
+@app.get("/api/icons/<name>")
+def icon_image(name):
+    """A 128-dot PNG of one icon, so the page can show what it looks like."""
+    img = labels.load_icon(name, 128)
+    if img is None:
+        return jsonify({"ok": False, "message": "No such icon"}), 404
+    buf = io.BytesIO()
+    img.save(buf, "PNG")
+    buf.seek(0)
+    return send_file(buf, mimetype="image/png", max_age=0)
+
+
+@app.post("/api/icons")
+def upload_icon():
+    """Save an uploaded picture as a custom icon (multipart form: name, file).
+
+    The picture is converted to a black-and-white square in /data/icons.
+    Using a built-in icon's name replaces that built-in until it's deleted.
+    """
+    upload = request.files.get("file")
+    if not upload:
+        return jsonify({"ok": False, "message": "Choose a picture first."}), 400
+    name, err = labels.save_custom_icon(request.form.get("name"), upload.stream)
+    if err:
+        return jsonify({"ok": False, "message": err}), 400
+    return jsonify({"ok": True, "message": f"Icon “{name}” saved", "name": name,
+                    "icons": labels.list_icons()})
+
+
+@app.delete("/api/icons/<name>")
+def delete_icon(name):
+    """Delete a custom icon (built-in icons can't be deleted)."""
+    if not labels.delete_custom_icon(name):
+        return jsonify({"ok": False, "message": "That isn't a custom icon."}), 404
+    return jsonify({"ok": True, "message": f"Icon “{name}” deleted", "icons": labels.list_icons()})
+
+
+@app.errorhandler(413)
+def too_large(_err):
+    """Reply in JSON when an upload is bigger than MAX_CONTENT_LENGTH."""
+    return jsonify({"ok": False, "message": "That file is too big (10 MB at most)."}), 413
+
+
+@app.post("/api/travel/parse")
+def travel_parse():
+    """Pick one flight out of pasted text (e.g. a booking confirmation).
+
+    Body {"text": ...} -> {"ok", "leg", "missing", "more"}; the page fills
+    its flight boxes with "leg" so the user can check it before adding.
+    Years left out of dates are filled in using today's date in the
+    Settings time zone.
+    """
+    text = (request.get_json(silent=True) or {}).get("text") or ""
+    ref = labels.today(load_settings().get("timezone") or "UTC")
+    leg, missing, more = labels.parse_flight(str(text)[:20000], reference=ref)
+    if not leg:
+        return jsonify({"ok": False, "message": "Couldn't find a flight in that text. Check it has a date, a flight number, airports or times."}), 400
+    return jsonify({"ok": True, "leg": leg, "missing": missing, "more": more})
 
 
 def _render_from_request(kind):
@@ -280,7 +373,8 @@ def _render_from_request(kind):
     try:
         # Time zone for "today", and the shortest label the chosen model accepts
         return labels.render(kind, data, tz=s.get("timezone") or "UTC",
-                             min_length=printer.min_length(s["printer"].get("model"))), None
+                             min_length=printer.min_length(s["printer"].get("model")),
+                             temp_unit=s.get("temp_unit") or "C"), None
     except Exception as exc:
         return None, (jsonify({"ok": False, "message": f"Couldn't lay out the label: {exc}"}), 400)
 

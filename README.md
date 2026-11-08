@@ -3,7 +3,7 @@
 Print useful labels on a Brother QL label printer from your phone or from
 Home Assistant.
 
-_Updated: 2026-11-08 18:06 GMT · Developer: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Updated: 2026-11-08 23:30 GMT · Developer: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 A small self-hosted web service, run in Docker (for example on a Synology
 NAS). It prints on a network-connected Brother QL printer from a
@@ -30,9 +30,12 @@ Home Assistant on the same host (optional)
 
 ## Label types
 
-Address (optional icon) · Freezer (presets, use-by date, cooking
-instructions) · Travel (your saved details + flights) · Battery (the
-smallest label your printer allows) · Network device (name, IP, VLAN, MAC).
+Address (optional icon, including your own uploaded pictures) · Food
+(freezer, fridge or cupboard: frozen/opened date, use-by in days or months,
+cooking instructions in °C or °F, notes, saved presets) · Travel (your
+saved details + flights, sorted and split into journeys, saved trips) ·
+Battery (the smallest label your printer allows) · Network device (name,
+IP, VLAN, MAC).
 
 ## Supported printers and labels
 
@@ -115,23 +118,46 @@ A new install opens on the **Settings** tab with the label tabs locked:
 
 - **Printer:** pick your **model**, enter its **IP address** and **port**
   (Brother printers use **9100**).
-- **Time zone:** it suggests your phone's. It sets "today" on freezer and
-  battery labels; daylight saving changes are handled automatically.
+- **Time zone:** it suggests your device's (or tap **Use this device's time
+  zone**). It sets "today" on food and battery labels; daylight saving
+  changes are handled automatically.
 - Tap **Test and save**. It connects to the printer first and only saves if
   that works; then the label tabs unlock. (Until then the print API replies
   "Setup isn't finished".)
-- The box under the port shows this server's IP address, to help with
-  firewall rules. Inside Docker that's the container's internal address;
-  the printer sees connections from the host's own IP.
+- **Temperature unit:** °C or °F for cooking temperatures on food labels
+  (saved as soon as you choose).
+- **Colour:** the page's accent colour – green, blue, red, pink, purple,
+  orange or monochrome. Each has a light and a dark shade that follows
+  your device's light/dark theme (saved as soon as you choose).
+
+If a firewall sits between the host and the printer, allow the host's own
+IP address (e.g. your NAS's) to reach the printer on the printer port.
 
 Then, if you like:
 
 - **Travel tab:** type your name, address and phone once and tap
-  **Save as my details**.
-- **Freezer tab:** fill in a food you freeze often and tap **Save as preset**.
+  **Save my details**. They're then shown locked, with **Edit** and
+  **Clear**, and filled in every time.
+- **Travel flights:** add flights one at a time (date picker, airports you've
+  already used are suggested, the next flight starts on the day the last
+  one landed, **+1** is ticked for you when it lands at an earlier clock
+  time). Or open **Fill in from your booking**, paste one flight copied
+  from your confirmation email or itinerary (any layout), and the boxes
+  are filled in for you to check before tapping **Add flight**. They're sorted by date, and a gap of more
+  than a day starts a new journey on the label. **Save trip** keeps the
+  whole set to load again later; the flights on the page are also
+  remembered in your browser.
+- **Food tab:** fill in a food you make often and tap **Save as preset**.
+  A preset keeps everything except the date: choosing it again fills in
+  today's date and works out the use-by date afresh.
+- **Address tab → Your own icons:** upload a picture; it's converted to a
+  black-and-white square. Delete it there too.
 
-Everything is saved in the `data/` folder, so it survives updates and is
-included in your backups.
+The **Print** button sits directly under the label preview. Messages
+appear right next to the button you pressed.
+
+Everything is saved in the `data/` folder (never in this repo or the
+published image), so it survives updates and is included in your backups.
 
 ## Optional password
 
@@ -184,9 +210,15 @@ Settings → Secrets and variables → Actions.
 ## Your own icons
 
 Built-in icons: gift, birthday, christmas, celebration, heart, star, balloon,
-wedding, new home. To add or replace one, put a **black-on-white PNG** in
-`data/icons/` (e.g. `graduation.png`, or `gift.png` to replace the
-built-in). It appears in the Icon list on the next page load.
+wedding, new home. They're drawn by the app's own code (no image files or
+third-party artwork).
+
+To add your own, open **Address → Your own icons**, give it a name and
+choose a picture (PNG, JPEG, GIF, WebP or BMP, up to 10 MB). It's trimmed,
+fitted into a square and converted to pure black and white, then saved in
+`data/icons/`. Using a built-in's name (e.g. `gift`) replaces that built-in
+until you delete yours. You can also copy black-on-white PNGs into
+`data/icons/` directly.
 
 ## Troubleshooting
 
@@ -235,21 +267,26 @@ data:
 |---|---|
 | `POST /api/preview/<type>` | PNG preview (header `X-Label-Length-mm`) |
 | `POST /api/print/<type>` | Print → `{"ok": true/false, "message": "…"}` (add `"copies": n`) |
-| `GET/PUT /api/settings` | Saved details, freezer presets, battery types, `printer` (`host`, `port`, `model`), `timezone` (e.g. `Europe/London`); `password_set` is read-only |
-| `GET /api/options` | Printer models, time zone names, this server's detected IP |
+| `GET/PUT /api/settings` | Saved details (`me`), `food_presets`, `trips`, battery types, `printer` (`host`, `port`, `model`), `timezone` (e.g. `Europe/London`), `temp_unit` (`C`/`F`), `accent` (`green`/`blue`/`red`/`pink`/`purple`/`orange`/`mono`); `password_set` is read-only |
+| `GET /api/options` | Printer models and time zone names |
 | `POST /api/printer/test` | Check the printer can be reached without printing (body `host`/`port`, or empty to test the saved one) |
-| `GET /api/icons` | Icon names |
+| `GET /api/icons` | Icons: `[{"name", "custom"}]` |
+| `GET /api/icons/<name>` | Small PNG of an icon |
+| `POST /api/icons` | Upload a custom icon (multipart form: `name`, `file`) |
+| `DELETE /api/icons/<name>` | Delete a custom icon |
+| `POST /api/travel/parse` | Pick one flight out of pasted text: `{"text": "…"}` → `{"leg": {…}, "missing": […], "more": true/false}` |
 | `POST /api/login`, `POST /api/logout`, `PUT /api/password` | Optional password: log in/out; set, change or remove (`{"current": "…", "new": "…"}`, empty `new` removes) |
 
 If a password is set, every call except `/api/login` and `/health` needs a
 login session or HTTP Basic auth, and answers `401` otherwise.
 
-`<type>` = `address`, `freezer`, `travel`, `battery`, `network`.
+`<type>` = `address`, `food`, `travel`, `battery`, `network` (`freezer`
+still works as the old name for `food`).
 
 Fields:
 - **address:** `name`, `address` (lines separated by newlines), `icon`
-- **freezer:** `title`, `frozen` (YYYY-MM-DD), `months`, `method` (`from_frozen` / `defrost` / empty), `minutes`, `temp_c`, `fan_c`, `notes`
-- **travel:** `name`, `address`, `phone`, `flights` (blank line between journeys)
+- **food:** `title`, `storage` (`frozen` / `fridge` / `cupboard`), `date` (YYYY-MM-DD, default today), `shelf` (number), `shelf_unit` (`days` / `months`), `method` (`from_frozen` / `defrost` / `cook` / `none`), `minutes`, `temp`, `fan` (in the Settings unit), `notes`. The old freezer fields `frozen`, `months`, `temp_c`, `fan_c` still work.
+- **travel:** `name`, `address`, `phone`, and either `legs` (list of `{"date": "YYYY-MM-DD", "flight", "from", "to", "dep": "HHMM", "arr": "HHMM", "plus1": true/false}` – sorted and split into journeys for you) or `flights` (text as typed, blank line between journeys)
 - **battery:** `device`, `battery`, `changed` (YYYY-MM-DD, default today)
 - **network:** `name`, `ip`, `vlan`, `mac`, `notes`
 

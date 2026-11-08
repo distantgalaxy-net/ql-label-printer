@@ -1,8 +1,10 @@
 <!doctype html>
 <!--
   labelprinter - login page (only used when a password has been set)
-  Date: 2026-11-08 16:01 GMT
+  Date: 2026-11-08 23:20 GMT (updated; first written 2026-11-08 16:01 GMT)
   Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
+  Uses the accent colour chosen in Settings: the main page remembers it in
+  this browser (localStorage), since settings can't be read before login.
   Posts the password to /api/login; on success the server sets a signed
   session cookie (30 days) and we go to the main page.
 -->
@@ -11,6 +13,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Label Printer</title>
+<link rel="stylesheet" href="/theme.css">
+<script>
+  // Apply the accent colour remembered from the main page (default green)
+  try { document.documentElement.dataset.accent = localStorage.getItem("labelprinter-accent") || "green"; } catch (e) {}
+</script>
 <style>
   :root {
     --bg: #f3f4f1; --card: #ffffff; --fg: #1d2420; --muted: #5d6a63; --line: #d9ddd7;

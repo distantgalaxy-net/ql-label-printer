@@ -1,36 +1,49 @@
 <!doctype html>
 <!--
   labelprinter - label printing page (phone-first)
-  Date: 2026-11-08 16:01 GMT (updated; first written 2026-11-07 18:15 GMT)
+  Date: 2026-11-08 23:20 GMT (updated; first written 2026-11-07 18:15 GMT)
   Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
   One form per label type; the preview updates as you type, then Print.
-  The Settings tab holds the printer (model, IP address, port) and the time
-  zone (saved on the server), so no home details are built into the page
-  or the image. Until the printer has been saved with a successful
-  connection test (and a time zone chosen), only the Settings tab works.
+  The Settings tab holds the printer (model, IP address, port), the time
+  zone, the temperature unit and the accent colour (saved on the server), so no home details
+  are built into the page or the image. Until the printer has been saved
+  with a successful connection test (and a time zone chosen), only the
+  Settings tab works.
+  The Print button sits directly under the label preview, and messages
+  appear right next to the button that was pressed, so they can't be missed.
   An optional password (Settings tab) protects the page; if one is set and
   the login has expired, any API call answers 401 and we go to /login.
+  Everything saved (presets, details, trips, icons) lives on the server in
+  /data - never in this repo or the Docker image.
 -->
 <html lang="en-GB">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Label Printer</title>
+<link rel="stylesheet" href="/theme.css">
+<script>
+  // Apply the last-used accent colour straight away (before settings load),
+  // so the page doesn't flash green first. Shades are in theme.css.
+  try { document.documentElement.dataset.accent = localStorage.getItem("labelprinter-accent") || "green"; } catch (e) {}
+</script>
 <style>
   :root {
     --bg: #f3f4f1; --card: #ffffff; --fg: #1d2420; --muted: #5d6a63; --line: #d9ddd7;
     --accent: #2f6b4f; --accent-fg: #ffffff; --ok: #2f7d4a; --bad: #b3402f; --field: #fbfbfa;
+    --ok-bg: #e5f3ea; --bad-bg: #fbe9e5;
     color-scheme: light;
   }
   @media (prefers-color-scheme: dark) {
     :root { --bg: #121614; --card: #1b201d; --fg: #e5ebe7; --muted: #9aa8a0; --line: #2d3530;
             --accent: #5fae86; --accent-fg: #0f1411; --ok: #6cc58c; --bad: #ef8a78; --field: #161a18;
+            --ok-bg: #16291e; --bad-bg: #321a16;
             color-scheme: dark; }
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; background: var(--bg); color: var(--fg);
     font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-  .wrap { max-width: 560px; margin: 0 auto; padding: 14px 16px calc(110px + env(safe-area-inset-bottom)); }
+  .wrap { max-width: 560px; margin: 0 auto; padding: 14px 16px calc(24px + env(safe-area-inset-bottom)); }
   h1 { font-size: 1.25rem; margin: 4px 0 12px; }
   .top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
   nav { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 12px; }
@@ -48,32 +61,58 @@
   .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
   .seg { display: flex; gap: 6px; flex-wrap: wrap; }
   .seg label { display: flex; align-items: center; gap: 6px; color: var(--fg); border: 1px solid var(--line);
-    border-radius: 8px; padding: 8px 10px; background: var(--field); }
+    border-radius: 8px; padding: 8px 10px; background: var(--field); cursor: pointer; }
+  .seg label:has(input:checked) { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
   .seg input { width: auto; }
+  /* Radio buttons and tick boxes follow the chosen accent colour */
+  input[type="radio"], input[type="checkbox"] { accent-color: var(--accent); }
+  .check { display: flex; align-items: center; gap: 8px; color: var(--fg); }
+  .check input { width: auto; }
   .small { font-size: .85rem; color: var(--muted); margin: 0; }
   .btn2 { font: inherit; font-size: .95rem; border: 1px solid var(--accent); border-radius: 8px; padding: 9px 14px;
     background: var(--card); color: var(--accent); cursor: pointer; }
   .btn2.primary { background: var(--accent); color: var(--accent-fg); }
+  .btn2.danger { border-color: var(--bad); color: var(--bad); }
+  .btn2.mini { padding: 5px 10px; font-size: .85rem; }
   .btn2:disabled { opacity: .55; }
-  .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
   .info { font-size: .85rem; color: var(--muted); margin: 0; padding: 10px; border-radius: 8px; background: var(--field); border: 1px dashed var(--line); }
   h2 { font-size: 1rem; margin: 6px 0 0; }
+  .group { display: grid; gap: 10px; border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+  .group > h3 { margin: 0; font-size: .95rem; }
+  details { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+  /* Browsers ignore grid spacing on <details> itself, so its contents sit
+     in an inner box that spaces them out (otherwise they touch/overlap) */
+  details > .inner { display: grid; gap: 10px; margin-top: 10px; }
+  summary { cursor: pointer; color: var(--accent); font-size: .95rem; }
   .linkbtn { font: inherit; font-size: .9rem; background: none; border: 0; color: var(--accent); padding: 0; cursor: pointer; justify-self: start; }
-  .preview { margin-bottom: 12px; }
-  .preview .small { margin-top: 4px; }
+  /* Messages: shown right beside the button that caused them */
+  .msg { margin: 0; font-size: .92rem; padding: 8px 10px; border-radius: 8px; border: 1px solid transparent; }
+  .msg:empty { display: none; }
+  .msg.ok { color: var(--ok); background: var(--ok-bg); border-color: var(--ok); }
+  .msg.bad { color: var(--bad); background: var(--bad-bg); border-color: var(--bad); }
+  .msg.ok::before { content: "✓ "; font-weight: 700; }
+  .msg.bad::before { content: "⚠ "; font-weight: 700; }
+  .msg.info { color: var(--fg); background: var(--field); border-color: var(--line); }
+  .preview { margin-bottom: 12px; display: grid; gap: 6px; }
+  .preview .small { margin-top: 0; }
   .preview .paper { background: #fff; border: 1px solid var(--line); border-radius: 6px; padding: 8px; text-align: center; }
   .preview img { max-width: 100%; height: auto; image-rendering: pixelated; display: block; margin: 0 auto; }
-  .bar { position: fixed; left: 0; right: 0; bottom: 0; background: var(--card); border-top: 1px solid var(--line);
-    padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); }
-  .bar .in { max-width: 560px; margin: 0 auto; display: flex; gap: 10px; align-items: center; }
-  .bar input { width: 70px; text-align: center; }
-  .bar button { flex: 1; font: inherit; font-weight: 600; border: 0; border-radius: 10px; padding: 12px;
+  .iconpick { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: end; }
+  .thumb { width: 52px; height: 52px; background: #fff; border: 1px solid var(--line); border-radius: 6px; padding: 4px; image-rendering: pixelated; }
+  .list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+  .list li { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--field); }
+  .list li .grow { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .list li.break { border: 0; background: none; padding: 0 8px; color: var(--muted); font-size: .8rem; }
+  .legtext { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: .85rem; }
+  .summary { margin: 0; white-space: pre-line; color: var(--fg); }
+  .printrow { display: flex; gap: 10px; align-items: center; }
+  .printrow input { width: 70px; text-align: center; }
+  .printrow button { flex: 1; font: inherit; font-weight: 600; border: 0; border-radius: 10px; padding: 12px;
     background: var(--accent); color: var(--accent-fg); cursor: pointer; }
-  .bar button:disabled { opacity: .55; }
-  #status { min-height: 1.4em; margin: 8px 0 0; font-size: .92rem; }
-  #status.ok { color: var(--ok); } #status.bad { color: var(--bad); }
+  .printrow button:disabled { opacity: .55; }
   [hidden] { display: none !important; }
-  button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 </style>
 </head>
 <body>
@@ -81,7 +120,7 @@
   <div class="top"><h1>Label Printer</h1><button type="button" class="linkbtn" id="logout" hidden>Log out</button></div>
   <nav role="tablist" id="tabs">
     <button role="tab" data-kind="address">Address</button>
-    <button role="tab" data-kind="freezer">Freezer</button>
+    <button role="tab" data-kind="food">Food</button>
     <button role="tab" data-kind="travel">Travel</button>
     <button role="tab" data-kind="battery">Battery</button>
     <button role="tab" data-kind="network">Network</button>
@@ -91,6 +130,13 @@
   <div class="preview" id="preview-box">
     <div class="paper"><img id="preview" alt="Label preview"></div>
     <p class="small" id="length"></p>
+    <p class="msg" id="msg-preview" role="status"></p>
+    <!-- Print sits right under the preview, so you print what you see -->
+    <div class="printrow">
+      <input id="copies" type="number" min="1" max="20" value="1" aria-label="Copies" inputmode="numeric">
+      <button id="print" type="button">Print</button>
+    </div>
+    <p class="msg" id="msg-print" role="status"></p>
   </div>
 
   <div class="card">
@@ -98,38 +144,141 @@
     <form data-kind="address" hidden>
       <label>Name<input id="a-name" name="name" autocomplete="off" placeholder="Alex Example"></label>
       <label>Address (one line per row)<textarea id="a-address" name="address" placeholder="1 High Street&#10;Anytown&#10;AB1 2CD"></textarea></label>
-      <label>Icon<select id="a-icon" name="icon"><option value="none">None</option></select></label>
+      <div class="iconpick">
+        <label>Icon<select id="a-icon" name="icon"><option value="none">None</option></select></label>
+        <img class="thumb" id="a-icon-thumb" alt="Selected icon" hidden>
+      </div>
+      <details id="i-manage">
+        <summary>Your own icons (upload or delete)</summary>
+        <div class="inner">
+        <p class="small">Upload any picture. It's turned into a black-and-white square (about 16mm on the label): white margins are trimmed and light colours become white. Bold, simple shapes on a plain background work best. Icons are saved on this server only.</p>
+        <div class="row">
+          <label>Icon name<input id="i-name" maxlength="30" autocomplete="off" placeholder="e.g. graduation"></label>
+          <label>Picture<input id="i-file" type="file" accept="image/png,image/jpeg,image/gif,image/webp,image/bmp"></label>
+        </div>
+        <div class="actions"><button type="button" class="btn2 primary" id="i-upload">Upload icon</button></div>
+        <p class="msg" id="msg-icons" role="status"></p>
+        <ul class="list" id="i-list"></ul>
+        <p class="small" id="i-none">No custom icons yet.</p>
+        </div>
+      </details>
     </form>
 
-    <!-- Freezer -->
-    <form data-kind="freezer" hidden>
-      <label>Preset<select id="f-preset"><option value="">Choose a saved food…</option></select></label>
+    <!-- Food (freezer, fridge or cupboard) -->
+    <form data-kind="food" hidden>
+      <label>Saved food (preset)<select id="f-preset"><option value="">Choose a saved food…</option></select></label>
+      <div class="seg" role="radiogroup" aria-label="Where it's kept">
+        <label><input type="radio" name="storage" value="frozen" checked> Freezer</label>
+        <label><input type="radio" name="storage" value="fridge"> Fridge</label>
+        <label><input type="radio" name="storage" value="cupboard"> Cupboard</label>
+      </div>
       <label>Food<input id="f-title" name="title" autocomplete="off" placeholder="Beef chilli"></label>
       <div class="row">
-        <label>Frozen on<input id="f-frozen" name="frozen" type="date"></label>
-        <label>Use within (months)<input id="f-months" name="months" type="number" min="0" max="24" inputmode="numeric"></label>
+        <label><span id="f-date-label">Frozen on</span><input id="f-date" name="date" type="date"></label>
+        <label>Use within<input id="f-shelf" name="shelf" type="number" min="0" max="999" inputmode="numeric"></label>
       </div>
-      <div class="seg" role="radiogroup" aria-label="How to cook">
-        <label><input type="radio" name="method" value="from_frozen" checked> From frozen</label>
-        <label><input type="radio" name="method" value="defrost"> Defrost first</label>
-        <label><input type="radio" name="method" value=""> No instructions</label>
+      <div class="seg" role="radiogroup" aria-label="Use within days or months">
+        <label><input type="radio" name="shelf_unit" value="days"> Days</label>
+        <label><input type="radio" name="shelf_unit" value="months" checked> Months</label>
       </div>
-      <div class="row">
+      <h2>Cooking instructions</h2>
+      <div class="seg" role="radiogroup" aria-label="How to cook" id="f-methods">
+        <label data-for="frozen"><input type="radio" name="method" value="from_frozen" checked> From frozen</label>
+        <label data-for="frozen"><input type="radio" name="method" value="defrost"> Defrost first</label>
+        <label data-for="fridge cupboard"><input type="radio" name="method" value="cook"> Add instructions</label>
+        <label><input type="radio" name="method" value="none"> None</label>
+      </div>
+      <div class="row" id="f-cook">
         <label>Minutes<input id="f-minutes" name="minutes" type="number" min="0" inputmode="numeric"></label>
-        <label>Temp °C<input id="f-temp" name="temp_c" type="number" min="0" inputmode="numeric"></label>
-        <label>Fan °C<input id="f-fan" name="fan_c" type="number" min="0" inputmode="numeric"></label>
+        <label><span class="unit-label">Temp °C</span><input id="f-temp" name="temp" type="number" min="0" inputmode="numeric"></label>
+        <label><span class="unit-label" data-fan>Fan °C</span><input id="f-fan" name="fan" type="number" min="0" inputmode="numeric"></label>
       </div>
       <label>Notes (optional)<textarea id="f-notes" name="notes" style="min-height:60px" placeholder="Stir halfway"></textarea></label>
-      <button type="button" class="linkbtn" id="f-save">Save as preset</button>
+      <div class="group">
+        <h3>Presets</h3>
+        <p class="small">A preset saves everything on this form except the date. When you pick it again the date is today and the use-by date is worked out again. Presets are saved on this server.</p>
+        <div class="actions">
+          <button type="button" class="btn2 primary" id="f-save">Save as preset</button>
+          <button type="button" class="btn2 danger" id="f-delete" hidden>Delete preset</button>
+        </div>
+        <p class="msg" id="msg-food" role="status"></p>
+      </div>
     </form>
 
     <!-- Travel -->
     <form data-kind="travel" hidden>
-      <label>Name<input id="t-name" name="name"></label>
-      <label>Address<input id="t-address" name="address"></label>
-      <label>Phone<input id="t-phone" name="phone" type="tel"></label>
-      <button type="button" class="linkbtn" id="t-save">Save as my details</button>
-      <label>Flights (leave a blank line between journeys)<textarea id="t-flights" name="flights" class="mono" placeholder="1 March 0900-1130, XX 0123, AAA-BBB&#10;2 March 1400-1630, XX 0456, BBB-CCC"></textarea></label>
+      <div class="group">
+        <h3>My details</h3>
+        <!-- Saved details are shown locked; Edit unlocks them -->
+        <div id="t-me-view" hidden>
+          <p class="summary" id="t-me-summary"></p>
+          <div class="actions" style="margin-top:8px">
+            <button type="button" class="btn2" id="t-me-edit">Edit</button>
+            <button type="button" class="btn2 danger" id="t-me-clear">Clear</button>
+          </div>
+        </div>
+        <div id="t-me-form" style="display:grid;gap:10px">
+          <label>Name<input id="t-name" name="name" autocomplete="name"></label>
+          <label>Address<input id="t-address" name="address" autocomplete="street-address"></label>
+          <label>Phone<input id="t-phone" name="phone" type="tel" autocomplete="tel"></label>
+          <div class="actions">
+            <button type="button" class="btn2 primary" id="t-save">Save my details</button>
+            <button type="button" class="btn2" id="t-cancel" hidden>Cancel</button>
+          </div>
+          <p class="small">Saved details are filled in every time you open this page.</p>
+        </div>
+        <p class="msg" id="msg-me" role="status"></p>
+      </div>
+
+      <div class="group">
+        <h3>Flights</h3>
+        <label>Saved trip<select id="t-trip"><option value="">Load a saved trip…</option></select></label>
+        <ul class="list" id="t-legs"></ul>
+        <p class="small" id="t-legs-none">No flights yet. Add them below, in any order: they're sorted by date, and a gap of more than a day starts a new journey.</p>
+
+        <!-- One flight at a time; airports used already are suggested -->
+        <div class="group" id="t-leg-form">
+          <h3 id="t-leg-title">Add a flight</h3>
+          <details id="t-paste-box">
+            <summary>Fill in from your booking (paste)</summary>
+            <div class="inner">
+            <p class="small">Copy one flight from your booking confirmation or itinerary, any layout, and paste it here. The boxes below are filled in for you to check before you tap <strong>Add flight</strong>.</p>
+            <textarea id="t-paste" placeholder="e.g. Monday, 24 August 2026 · XX 95 · Anytown (AAA) → Otherville (BBB) · Departure 18:05 · Arrival 20:15"></textarea>
+            <div class="actions"><button type="button" class="btn2 primary" id="t-paste-fill">Fill in the boxes</button></div>
+            <p class="msg" id="msg-paste" role="status"></p>
+            </div>
+          </details>
+          <div class="row">
+            <label>Date<input id="l-date" type="date"></label>
+            <label>Flight number<input id="l-flight" autocomplete="off" placeholder="XX 0123" spellcheck="false"></label>
+          </div>
+          <div class="row">
+            <label>From (airport)<input id="l-from" list="airports" autocomplete="off" maxlength="4" placeholder="AAA" spellcheck="false"></label>
+            <label>To (airport)<input id="l-to" list="airports" autocomplete="off" maxlength="4" placeholder="BBB" spellcheck="false"></label>
+          </div>
+          <div class="row">
+            <label>Departs<input id="l-dep" type="time"></label>
+            <label>Arrives<input id="l-arr" type="time"></label>
+          </div>
+          <label class="check"><input id="l-plus1" type="checkbox"> Lands the next day (+1)</label>
+          <div class="actions">
+            <button type="button" class="btn2 primary" id="l-add">Add flight</button>
+            <button type="button" class="btn2" id="l-cancel" hidden>Cancel</button>
+          </div>
+          <p class="msg" id="msg-legs" role="status"></p>
+        </div>
+        <datalist id="airports"></datalist>
+
+        <div class="row">
+          <label>Trip name<input id="t-trip-name" maxlength="60" autocomplete="off" placeholder="e.g. Summer holiday"></label>
+        </div>
+        <div class="actions">
+          <button type="button" class="btn2 primary" id="t-trip-save">Save trip</button>
+          <button type="button" class="btn2 danger" id="t-trip-delete" hidden>Delete saved trip</button>
+          <button type="button" class="btn2" id="t-clear">Clear flights</button>
+        </div>
+        <p class="msg" id="msg-trip" role="status"></p>
+      </div>
     </form>
 
     <!-- Battery -->
@@ -154,7 +303,7 @@
       <label>Notes (optional)<textarea id="n-notes" name="notes" style="min-height:60px"></textarea></label>
     </form>
 
-    <!-- Settings: not a label, so the preview and Print bar are hidden on this tab -->
+    <!-- Settings: not a label, so the preview and Print button are hidden on this tab -->
     <form data-kind="settings" hidden>
       <p class="info" id="s-welcome" hidden><strong>Welcome!</strong> Set up your printer to get started. Tap <strong>Test and save</strong>: it checks it can reach the printer, then unlocks the label tabs.</p>
       <h2>Printer</h2>
@@ -164,16 +313,37 @@
         <label>Printer IP address<input id="s-host" autocomplete="off" inputmode="decimal" placeholder="e.g. 192.168.1.20" spellcheck="false"></label>
         <label>Port<input id="s-port" type="number" min="1" max="65535" inputmode="numeric" placeholder="9100"></label>
       </div>
-      <p class="small">Brother printers use port 9100. If printing is refused, turn Editor Lite off on the printer.</p>
-      <p class="info" id="s-server">This server: checking…</p>
+      <p class="small">Brother printers use port 9100. If printing is refused, turn Editor Lite off on the printer. If a firewall sits between them, allow the machine running this service (e.g. your NAS) to reach the printer on this port.</p>
 
       <h2>Time zone</h2>
       <label>Time zone<select id="s-tz"><option value="">Choose…</option></select></label>
-      <button type="button" class="linkbtn" id="s-tz-device">Use this phone's time zone</button>
+      <div class="actions"><button type="button" class="btn2" id="s-tz-device">Use this device's time zone</button></div>
       <p class="small" id="s-tz-now">Used for today's date on labels. Daylight saving (e.g. GMT → BST) changes automatically.</p>
       <div class="actions">
         <button type="button" class="btn2 primary" id="s-save">Test and save</button>
       </div>
+      <p class="msg" id="msg-settings" role="status"></p>
+
+      <h2>Temperature unit</h2>
+      <p class="small">Used for cooking temperatures on food labels. Saved straight away.</p>
+      <div class="seg" role="radiogroup" aria-label="Temperature unit">
+        <label><input type="radio" name="s-unit" value="C" checked> °C (Celsius)</label>
+        <label><input type="radio" name="s-unit" value="F"> °F (Fahrenheit)</label>
+      </div>
+      <p class="msg" id="msg-units" role="status"></p>
+
+      <h2>Colour</h2>
+      <p class="small">The accent colour for buttons and tabs. Each has a light and a dark shade to suit your device's theme. Saved straight away.</p>
+      <div class="seg" role="radiogroup" aria-label="Accent colour">
+        <label><input type="radio" name="s-accent" value="green"><span class="sw" data-c="green"></span> Green</label>
+        <label><input type="radio" name="s-accent" value="blue"><span class="sw" data-c="blue"></span> Blue</label>
+        <label><input type="radio" name="s-accent" value="red"><span class="sw" data-c="red"></span> Red</label>
+        <label><input type="radio" name="s-accent" value="pink"><span class="sw" data-c="pink"></span> Pink</label>
+        <label><input type="radio" name="s-accent" value="purple"><span class="sw" data-c="purple"></span> Purple</label>
+        <label><input type="radio" name="s-accent" value="orange"><span class="sw" data-c="orange"></span> Orange</label>
+        <label><input type="radio" name="s-accent" value="mono"><span class="sw" data-c="mono"></span> Monochrome</label>
+      </div>
+      <p class="msg" id="msg-accent" role="status"></p>
 
       <h2>Password (optional)</h2>
       <p class="small" id="pw-state"></p>
@@ -184,18 +354,10 @@
       </div>
       <div class="actions">
         <button type="button" class="btn2" id="pw-set">Set password</button>
-        <button type="button" class="btn2" id="pw-remove" hidden>Remove password</button>
+        <button type="button" class="btn2 danger" id="pw-remove" hidden>Remove password</button>
       </div>
+      <p class="msg" id="msg-pw" role="status"></p>
     </form>
-
-    <p id="status" role="status"></p>
-  </div>
-</div>
-
-<div class="bar" id="print-bar">
-  <div class="in">
-    <input id="copies" type="number" min="1" max="20" value="1" aria-label="Copies" inputmode="numeric">
-    <button id="print" type="button">Print</button>
   </div>
 </div>
 
@@ -215,17 +377,40 @@ let settings = {};
 let kind = "address";
 let previewTimer = null;
 let previewUrl = null;
+let icons = [];            // [{name, custom}] from the server
+let legs = [];             // flights on the travel label, kept sorted
+let editingLeg = -1;       // index in legs being edited, or -1 when adding
 const $ = (id) => document.getElementById(id);
-// The phone's own time zone (e.g. "Europe/London"), or "" if unknown
+const STORAGE_NAMES = { frozen: "Freezer", fridge: "Fridge", cupboard: "Cupboard" };
+// This device's own time zone (e.g. "Europe/London"), or "" if unknown
 const deviceZone = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch (e) { return ""; } };
-// Today's date as YYYY-MM-DD in the saved time zone (the phone's if none
+// Today's date as YYYY-MM-DD in the saved time zone (the device's if none
 // saved). en-CA formats dates as YYYY-MM-DD; DST is handled by the browser.
 function today() {
   try { return new Intl.DateTimeFormat("en-CA", { timeZone: settings.timezone || undefined }).format(new Date()); }
   catch (e) { return new Intl.DateTimeFormat("en-CA").format(new Date()); }
 }
+// Add whole days to a YYYY-MM-DD date (in UTC, so DST can't shift it)
+function addDays(iso, n) {
+  const d = new Date(iso + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+// Small helpers for POST/PUT/DELETE with JSON; returns {ok, status, body}
+async function api(method, url, body) {
+  try {
+    const r = await fetch(url, { method, headers: body ? { "Content-Type": "application/json" } : {}, body: body ? JSON.stringify(body) : undefined });
+    const j = await r.json().catch(() => ({}));
+    return { ok: r.ok && j.ok !== false, status: r.status, body: j };
+  } catch (e) { return { ok: false, status: 0, body: { message: "Can't reach the label service" } }; }
+}
+// Which radio in a group is checked (inside a form), and set it
+const radio = (form, name) => (document.querySelector(`form[data-kind="${form}"] input[name="${name}"]:checked`) || {}).value;
+function setRadio(form, name, value) {
+  document.querySelectorAll(`form[data-kind="${form}"] input[name="${name}"]`).forEach(r => r.checked = r.value === value);
+}
 
-// Collect the active form's fields into a plain object
+// Collect a form's named fields into a plain object. The travel label also
+// sends its list of flights (the flight-entry boxes have no names).
 function formData(k) {
   const f = document.querySelector(`form[data-kind="${k}"]`);
   const out = {};
@@ -234,10 +419,27 @@ function formData(k) {
     if (el.type === "radio") { if (el.checked) out[el.name] = el.value; continue; }
     out[el.name] = el.value;
   }
+  if (k === "travel") out.legs = legs;
   return out;
 }
 
-function setStatus(msg, cls) { const s = $("status"); s.textContent = msg || ""; s.className = cls || ""; }
+// ---- messages -------------------------------------------------------
+// Show a message in the box next to the button that caused it.
+// cls: "ok" (green tick), "bad" (red warning) or "info". Success messages
+// fade after 8 seconds; the box is scrolled into view if it's off screen.
+const msgTimers = {};
+function say(id, text, cls = "ok") {
+  const el = $(id);
+  if (!el) return;
+  clearTimeout(msgTimers[id]);
+  el.textContent = text || "";
+  el.className = `msg ${text ? cls : ""}`;
+  if (!text) return;
+  el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  if (cls === "ok") msgTimers[id] = setTimeout(() => say(id, ""), 8000);
+}
+// Clear every message (e.g. when changing tab)
+function clearMessages() { document.querySelectorAll(".msg").forEach(m => say(m.id, "")); }
 
 // ---- tabs --------------------------------------------------------
 // True until the printer is saved (connection tested) and a time zone chosen
@@ -254,17 +456,18 @@ function setLocked(value) {
 }
 
 // Show one tab's form. The Settings tab isn't a label, so it hides the
-// preview and the Print bar and skips the preview request.
+// preview (with its Print button) and skips the preview request.
 function showTab(k) {
+  if (k === "freezer") k = "food";           // old name, from a saved last tab
+  if (!document.querySelector(`form[data-kind="${k}"]`)) k = "address";
   if (locked && k !== "settings") return;   // labels stay locked until setup is done
   kind = k;
   const isSettings = k === "settings";
   document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.kind === k)));
   document.querySelectorAll("form[data-kind]").forEach(f => f.hidden = f.dataset.kind !== k);
   $("preview-box").hidden = isSettings;
-  $("print-bar").hidden = isSettings;
   try { localStorage.setItem("labelprinter-tab", k); } catch (e) {}
-  setStatus("");
+  clearMessages();
   if (!isSettings) schedulePreview(0);
 }
 document.querySelectorAll("#tabs button").forEach(b => b.addEventListener("click", () => showTab(b.dataset.kind)));
@@ -274,18 +477,20 @@ function schedulePreview(delay = 350) {
   clearTimeout(previewTimer);
   previewTimer = setTimeout(updatePreview, delay);
 }
+// Ask the server to draw the label and show it; problems appear under the preview
 async function updatePreview() {
   if (kind === "settings") return;   // nothing to preview on the Settings tab
   try {
     const r = await fetch(`/api/preview/${kind}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(formData(kind)) });
-    if (!r.ok) { const j = await r.json().catch(() => ({})); setStatus(j.message || "Preview failed", "bad"); return; }
+    if (!r.ok) { const j = await r.json().catch(() => ({})); say("msg-preview", j.message || "Preview failed", "bad"); return; }
     const blob = await r.blob();
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     previewUrl = URL.createObjectURL(blob);
     $("preview").src = previewUrl;
     const mm = r.headers.get("X-Label-Length-mm");
     $("length").textContent = mm ? `62mm wide × about ${mm}mm long` : "";
-  } catch (e) { setStatus("Can't reach the label service", "bad"); }
+    say("msg-preview", "");
+  } catch (e) { say("msg-preview", "Can't reach the label service", "bad"); }
 }
 document.querySelectorAll("form").forEach(f => {
   f.addEventListener("input", () => schedulePreview());
@@ -293,64 +498,368 @@ document.querySelectorAll("form").forEach(f => {
 });
 
 // ---- print -------------------------------------------------------
+// The result is shown right under the Print button
 $("print").addEventListener("click", async () => {
   const btn = $("print");
-  btn.disabled = true; btn.textContent = "Printing…"; setStatus("");
-  try {
-    const body = Object.assign(formData(kind), { copies: $("copies").value || 1 });
-    const r = await fetch(`/api/print/${kind}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    const j = await r.json().catch(() => ({ ok: false, message: "No reply from the label service" }));
-    // The server's message: "Label sent to printer" or what went wrong
-    setStatus(j.message || (j.ok ? "Label sent to printer" : "Printing failed"), j.ok ? "ok" : "bad");
-  } catch (e) { setStatus("Can't reach the label service", "bad"); }
+  btn.disabled = true; btn.textContent = "Printing…"; say("msg-print", "");
+  const body = Object.assign(formData(kind), { copies: $("copies").value || 1 });
+  const res = await api("POST", `/api/print/${kind}`, body);
+  // The server's message: "Label sent to printer" or what went wrong
+  say("msg-print", res.body.message || (res.ok ? "Label sent to printer" : "Printing failed"), res.ok ? "ok" : "bad");
   btn.disabled = false; btn.textContent = "Print";
 });
 
-// ---- settings: presets, my details, lists ------------------------
-// Save part of the settings. Returns true, or false if the server refused
-// it (the reason is kept in lastSaveError, e.g. a bad IP address).
-let lastSaveError = "";
+// ---- saving settings -------------------------------------------------
+// Save part of the settings. Returns "" on success, or the reason the
+// server refused it (e.g. a bad IP address or an unreachable printer).
 async function saveSettings(patch) {
-  lastSaveError = "";
-  try {
-    const r = await fetch("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) });
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok) { lastSaveError = j.message || "Couldn't save"; return false; }
-    // The server replies with what it saved (including printer "verified")
-    if (j.settings) settings = { ...j.settings, password_set: settings.password_set }; else Object.assign(settings, patch);
-  } catch (e) { lastSaveError = "Can't reach the label service"; return false; }
-  return true;
+  const res = await api("PUT", "/api/settings", patch);
+  if (!res.ok) return res.body.message || "Couldn't save";
+  // The server replies with what it saved (including printer "verified")
+  if (res.body.settings) settings = { ...res.body.settings, password_set: settings.password_set };
+  else Object.assign(settings, patch);
+  return "";
 }
 
+// ---- Address tab: icons -----------------------------------------------
+const titleCase = (n) => n.charAt(0).toUpperCase() + n.slice(1);
+const iconUrl = (n) => `/api/icons/${encodeURIComponent(n)}?v=${Date.now()}`;
+// Fill the Icon dropdown and the "Your own icons" list from `icons`
+function fillIcons(select) {
+  const sel = $("a-icon"), keep = select ?? sel.value;
+  sel.length = 1;
+  icons.forEach(i => sel.add(new Option(titleCase(i.name) + (i.custom ? " (yours)" : ""), i.name)));
+  sel.value = icons.some(i => i.name === keep) ? keep : "none";
+  showIconThumb();
+  const list = $("i-list"); list.textContent = "";
+  const mine = icons.filter(i => i.custom);
+  $("i-none").hidden = mine.length > 0;
+  mine.forEach(i => {
+    const li = document.createElement("li");
+    const img = document.createElement("img"); img.className = "thumb"; img.src = iconUrl(i.name); img.alt = "";
+    const name = document.createElement("span"); name.className = "grow"; name.textContent = titleCase(i.name);
+    const del = document.createElement("button"); del.type = "button"; del.className = "btn2 danger mini"; del.textContent = "Delete";
+    del.addEventListener("click", () => deleteIcon(i.name));
+    li.append(img, name, del); list.append(li);
+  });
+}
+// Show a small picture of the chosen icon next to the dropdown
+function showIconThumb() {
+  const n = $("a-icon").value, t = $("a-icon-thumb");
+  t.hidden = n === "none";
+  if (n !== "none") t.src = iconUrl(n);
+}
+$("a-icon").addEventListener("change", showIconThumb);
+// Suggest an icon name from the picture's file name
+$("i-file").addEventListener("change", () => {
+  const f = $("i-file").files[0];
+  if (f && !$("i-name").value.trim()) $("i-name").value = f.name.replace(/\.[^.]+$/, "").replace(/[^a-z0-9 _-]+/gi, " ").trim().toLowerCase().slice(0, 30);
+});
+// Upload: the server converts the picture to black and white and saves it
+$("i-upload").addEventListener("click", async () => {
+  const file = $("i-file").files[0], name = $("i-name").value.trim();
+  if (!file) { say("msg-icons", "Choose a picture first", "bad"); return; }
+  if (!name) { say("msg-icons", "Give the icon a name", "bad"); return; }
+  if (icons.some(i => i.name === name.toLowerCase() && i.custom) && !confirm(`Replace your icon “${name}”?`)) return;
+  const btn = $("i-upload"); btn.disabled = true; btn.textContent = "Uploading…";
+  const fd = new FormData(); fd.append("name", name); fd.append("file", file);
+  let j = {};
+  try { j = await (await fetch("/api/icons", { method: "POST", body: fd })).json(); }
+  catch (e) { j = { ok: false, message: "Can't reach the label service" }; }
+  btn.disabled = false; btn.textContent = "Upload icon";
+  if (!j.ok) { say("msg-icons", j.message || "Upload failed", "bad"); return; }
+  icons = j.icons; fillIcons(j.name);              // select the new icon
+  $("i-file").value = ""; $("i-name").value = "";
+  say("msg-icons", `${j.message}. It's selected above – check the preview.`, "ok");
+  schedulePreview(0);
+});
+// Delete one of your own icons (built-ins can't be deleted)
+async function deleteIcon(name) {
+  if (!confirm(`Delete your icon “${name}”?`)) return;
+  const res = await api("DELETE", `/api/icons/${encodeURIComponent(name)}`);
+  if (!res.ok) { say("msg-icons", res.body.message || "Couldn't delete", "bad"); return; }
+  icons = res.body.icons; fillIcons();
+  say("msg-icons", res.body.message, "ok");
+  schedulePreview(0);
+}
+
+// ---- Food tab ---------------------------------------------------------
+// Unit symbol from Settings, for the temperature boxes
+const unitSym = () => settings.temp_unit === "F" ? "°F" : "°C";
+function showUnits() {
+  document.querySelectorAll(".unit-label").forEach(el => el.textContent = `${el.hasAttribute("data-fan") ? "Fan" : "Temp"} ${unitSym()}`);
+}
+// Match the form to where the food is kept: date wording, usual
+// "use within" unit, and the cooking choices that make sense.
+// keepChoices: true when a preset is being loaded (it sets them itself).
+function showStorage(keepChoices) {
+  const st = radio("food", "storage") || "frozen";
+  $("f-date-label").textContent = st === "frozen" ? "Frozen on" : "Opened on";
+  document.querySelectorAll("#f-methods label[data-for]").forEach(l => l.hidden = !l.dataset.for.split(" ").includes(st));
+  if (!keepChoices) {
+    setRadio("food", "shelf_unit", st === "frozen" ? "months" : "days");
+    const m = radio("food", "method");
+    const hiddenNow = document.querySelector(`#f-methods input[value="${m}"]`)?.closest("label")?.hidden;
+    if (!m || hiddenNow) setRadio("food", "method", st === "frozen" ? "from_frozen" : "none");
+  }
+  showCook();
+}
+// Hide the minutes/temperature boxes when there are no instructions
+function showCook() { $("f-cook").hidden = radio("food", "method") === "none"; }
+document.querySelectorAll('form[data-kind="food"] input[name="storage"]').forEach(r => r.addEventListener("change", () => showStorage(false)));
+document.querySelectorAll('form[data-kind="food"] input[name="method"]').forEach(r => r.addEventListener("change", showCook));
+
+// Convert a temperature between °C and °F, rounded to the nearest 5
+// (oven dials go in 5s or 10s). Blank stays blank.
+function convertTemp(value, from, to) {
+  if (value === "" || value == null || from === to || isNaN(Number(value))) return value ?? "";
+  const n = Number(value), out = to === "F" ? n * 9 / 5 + 32 : (n - 32) * 5 / 9;
+  return String(Math.round(out / 5) * 5);
+}
+const presets = () => settings.food_presets || [];
+const findPreset = (title) => presets().findIndex(p => (p.title || "").toLowerCase() === title.trim().toLowerCase());
 function fillPresets() {
   const sel = $("f-preset");
   sel.length = 1;
-  (settings.freezer_presets || []).forEach((p, i) => sel.add(new Option(p.title, i)));
+  presets().forEach((p, i) => sel.add(new Option(`${p.title} · ${STORAGE_NAMES[p.storage] || "Freezer"}`, i)));
+  presetButtons();
 }
+// "Save as preset" becomes "Update preset" when the food name is already saved
+function presetButtons() {
+  const found = findPreset($("f-title").value) >= 0;
+  $("f-save").textContent = found ? "Update preset" : "Save as preset";
+  $("f-delete").hidden = !found;
+}
+$("f-title").addEventListener("input", presetButtons);
+// Load a preset: everything except the date, which is today
 $("f-preset").addEventListener("change", e => {
-  const p = (settings.freezer_presets || [])[e.target.value];
+  const p = presets()[e.target.value];
   if (!p) return;
+  setRadio("food", "storage", p.storage || "frozen");
   $("f-title").value = p.title || "";
-  $("f-months").value = p.months ?? "";
+  $("f-date").value = today();
+  $("f-shelf").value = p.shelf ?? "";
+  setRadio("food", "shelf_unit", p.shelf_unit || (p.storage === "frozen" || !p.storage ? "months" : "days"));
+  setRadio("food", "method", p.method || "none");
   $("f-minutes").value = p.minutes ?? "";
-  $("f-temp").value = p.temp_c ?? "";
-  $("f-fan").value = p.fan_c ?? "";
+  // Saved in the other unit? Convert to the one chosen in Settings
+  const from = p.temp_unit || "C", to = settings.temp_unit || "C";
+  $("f-temp").value = convertTemp(p.temp, from, to);
+  $("f-fan").value = convertTemp(p.fan, from, to);
   $("f-notes").value = p.notes || "";
-  document.querySelectorAll('form[data-kind="freezer"] input[name="method"]').forEach(r => r.checked = r.value === (p.method ?? ""));
+  showStorage(true); presetButtons();
+  say("msg-food", `Loaded “${p.title}” with today's date`, "info");
   schedulePreview(0);
 });
+// Save (or update) a preset with everything except the date
 $("f-save").addEventListener("click", async () => {
-  const d = formData("freezer");
-  if (!d.title.trim()) { setStatus("Type the food name first", "bad"); return; }
-  const preset = { title: d.title.trim(), months: d.months, method: d.method, minutes: d.minutes, temp_c: d.temp_c, fan_c: d.fan_c, notes: d.notes };
-  const list = (settings.freezer_presets || []).filter(p => p.title.toLowerCase() !== preset.title.toLowerCase());
+  const d = formData("food");
+  if (!d.title.trim()) { say("msg-food", "Type the food name first", "bad"); return; }
+  const preset = { title: d.title.trim(), storage: d.storage, shelf: d.shelf, shelf_unit: d.shelf_unit, method: d.method,
+                   minutes: d.minutes, temp: d.temp, fan: d.fan, temp_unit: settings.temp_unit || "C", notes: d.notes };
+  const updating = findPreset(preset.title) >= 0;
+  const list = presets().filter(p => p.title.toLowerCase() !== preset.title.toLowerCase());
   list.push(preset); list.sort((a, b) => a.title.localeCompare(b.title));
-  setStatus(await saveSettings({ freezer_presets: list }) ? `Saved “${preset.title}”` : "Couldn't save the preset", "ok");
+  const err = await saveSettings({ food_presets: list });
+  if (err) { say("msg-food", err, "bad"); return; }
   fillPresets();
+  $("f-preset").value = String(findPreset(preset.title));
+  say("msg-food", updating ? `Updated preset “${preset.title}”` : `Saved preset “${preset.title}” – choose it from Saved food next time`, "ok");
 });
+$("f-delete").addEventListener("click", async () => {
+  const i = findPreset($("f-title").value);
+  if (i < 0) return;
+  const title = presets()[i].title;
+  if (!confirm(`Delete the preset “${title}”?`)) return;
+  const err = await saveSettings({ food_presets: presets().filter((_, n) => n !== i) });
+  if (err) { say("msg-food", err, "bad"); return; }
+  fillPresets(); $("f-preset").value = "";
+  say("msg-food", `Deleted preset “${title}”`, "ok");
+});
+
+// ---- Travel tab: my details ---------------------------------------------
+// Saved details are shown locked (with Edit / Clear); unsaved ones as boxes
+function showMe(editing) {
+  const me = settings.me || {};
+  const saved = Boolean(me.name || me.address || me.phone);
+  const edit = editing || !saved;
+  $("t-me-view").hidden = edit;
+  $("t-me-form").hidden = !edit;
+  $("t-cancel").hidden = !saved;
+  $("t-me-summary").textContent = [me.name, me.address, me.phone].filter(Boolean).join("\n");
+  if (!edit) { $("t-name").value = me.name || ""; $("t-address").value = me.address || ""; $("t-phone").value = me.phone || ""; }
+}
+$("t-me-edit").addEventListener("click", () => { showMe(true); $("t-name").focus(); });
+$("t-cancel").addEventListener("click", () => { showMe(false); schedulePreview(0); });
 $("t-save").addEventListener("click", async () => {
-  const me = { name: $("t-name").value, address: $("t-address").value, phone: $("t-phone").value };
-  setStatus(await saveSettings({ me }) ? "Saved your details" : "Couldn't save", "ok");
+  const me = { name: $("t-name").value.trim(), address: $("t-address").value.trim(), phone: $("t-phone").value.trim() };
+  if (!me.name && !me.address && !me.phone) { say("msg-me", "Fill in at least one detail first", "bad"); return; }
+  const err = await saveSettings({ me });
+  if (err) { say("msg-me", err, "bad"); return; }
+  showMe(false);
+  say("msg-me", "Saved your details – they'll be here every time", "ok");
+});
+$("t-me-clear").addEventListener("click", async () => {
+  if (!confirm("Clear your saved details?")) return;
+  const err = await saveSettings({ me: { name: "", address: "", phone: "" } });
+  if (err) { say("msg-me", err, "bad"); return; }
+  $("t-name").value = ""; $("t-address").value = ""; $("t-phone").value = "";
+  showMe(true); schedulePreview(0);
+  say("msg-me", "Cleared your details", "ok");
+});
+
+// ---- Travel tab: flights ---------------------------------------------------
+// A leg: {date, flight, from, to, dep "HH:MM", arr "HH:MM", plus1}.
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const hhmm = (t) => (t || "").replace(":", "");
+const toTime = (t) => { const d = (t || "").replace(/\D/g, ""); return d.length === 4 ? `${d.slice(0, 2)}:${d.slice(2)}` : ""; };
+const arrivalDate = (l) => l.plus1 ? addDays(l.date, 1) : l.date;
+// One flight as the label shows it: '1 Mar 0900-1130, XX 0123, AAA-BBB'
+function legText(l) {
+  const [, m, d] = l.date.split("-");
+  let times = [hhmm(l.dep), hhmm(l.arr)].filter(Boolean).join("-");
+  if (times && l.plus1) times += "+1";
+  const first = [`${Number(d)} ${MONTHS[Number(m) - 1]}`, times].filter(Boolean).join(" ");
+  return [first, l.flight, [l.from, l.to].filter(Boolean).join("-")].filter(Boolean).join(", ");
+}
+// Keep flights in date/time order (the label does the same)
+function sortLegs() { legs.sort((a, b) => (a.date + hhmm(a.dep)).localeCompare(b.date + hhmm(b.dep))); }
+// Remember the flights in this browser, so leaving the page doesn't lose them
+function saveDraft() {
+  try { localStorage.setItem("labelprinter-travel", JSON.stringify({ legs, trip: $("t-trip-name").value })); } catch (e) {}
+}
+// Redraw the list of flights, the airport suggestions and the preview
+function showLegs() {
+  sortLegs();
+  const list = $("t-legs"); list.textContent = "";
+  legs.forEach((l, i) => {
+    // More than a day between landing and the next take-off = a new journey
+    if (i > 0 && (new Date(l.date) - new Date(arrivalDate(legs[i - 1]))) / 864e5 > 1) {
+      const br = document.createElement("li"); br.className = "break"; br.textContent = "— next journey —"; list.append(br);
+    }
+    const li = document.createElement("li");
+    const t = document.createElement("span"); t.className = "grow legtext"; t.textContent = legText(l);
+    const ed = document.createElement("button"); ed.type = "button"; ed.className = "btn2 mini"; ed.textContent = "Edit";
+    ed.addEventListener("click", () => editLeg(i));
+    const rm = document.createElement("button"); rm.type = "button"; rm.className = "btn2 danger mini"; rm.textContent = "Remove";
+    rm.addEventListener("click", () => { legs.splice(i, 1); if (editingLeg === i) resetLegForm(); showLegs(); });
+    li.append(t, ed, rm); list.append(li);
+  });
+  $("t-legs-none").hidden = legs.length > 0;
+  // Every airport used so far, so return flights are one tap away
+  const seen = [...new Set(legs.flatMap(l => [l.from, l.to]).filter(Boolean))];
+  const dl = $("airports"); dl.textContent = "";
+  seen.forEach(a => dl.append(new Option(a)));
+  saveDraft();
+  schedulePreview(0);
+}
+// Empty the flight boxes ready for the next one. The date defaults to the
+// day the last flight landed and "From" to where it landed.
+function resetLegForm() {
+  editingLeg = -1;
+  const last = legs[legs.length - 1];
+  $("l-date").value = last ? arrivalDate(last) : (($("l-date").value) || today());
+  $("l-from").value = last ? last.to : "";
+  ["l-to", "l-flight", "l-dep", "l-arr"].forEach(id => $(id).value = "");
+  $("l-plus1").checked = false;
+  $("l-add").textContent = "Add flight"; $("t-leg-title").textContent = "Add a flight";
+  $("l-cancel").hidden = true;
+}
+// Put a flight back into the boxes to change it
+function editLeg(i) {
+  const l = legs[i]; editingLeg = i;
+  $("l-date").value = l.date; $("l-flight").value = l.flight; $("l-from").value = l.from; $("l-to").value = l.to;
+  $("l-dep").value = toTime(l.dep); $("l-arr").value = toTime(l.arr); $("l-plus1").checked = Boolean(l.plus1);
+  $("l-add").textContent = "Update flight"; $("t-leg-title").textContent = "Change this flight";
+  $("l-cancel").hidden = false;
+  $("t-leg-form").scrollIntoView({ block: "nearest", behavior: "smooth" });
+}
+// Tick "+1" automatically when it lands at an earlier clock time than it left
+function autoPlus1() {
+  const d = $("l-dep").value, a = $("l-arr").value;
+  if (d && a) $("l-plus1").checked = a < d;
+}
+$("l-dep").addEventListener("change", autoPlus1);
+$("l-arr").addEventListener("change", autoPlus1);
+["l-from", "l-to", "l-flight"].forEach(id => $(id).addEventListener("input", e => { e.target.value = e.target.value.toUpperCase(); }));
+$("l-cancel").addEventListener("click", () => { resetLegForm(); say("msg-legs", ""); });
+$("l-add").addEventListener("click", () => {
+  const leg = { date: $("l-date").value, flight: $("l-flight").value.trim().toUpperCase(), from: $("l-from").value.trim().toUpperCase(),
+                to: $("l-to").value.trim().toUpperCase(), dep: hhmm($("l-dep").value), arr: hhmm($("l-arr").value), plus1: $("l-plus1").checked };
+  if (!leg.date) { say("msg-legs", "Choose the date of the flight", "bad"); return; }
+  if (!leg.from && !leg.to && !leg.flight) { say("msg-legs", "Add the airports or the flight number", "bad"); return; }
+  const updated = editingLeg >= 0;
+  if (updated) legs[editingLeg] = leg; else legs.push(leg);
+  editingLeg = -1;
+  showLegs();
+  // Next flight defaults follow on from the one just added (not the
+  // latest by date, in case flights are entered out of order)
+  const just = leg;
+  resetLegForm();
+  $("l-date").value = arrivalDate(just); $("l-from").value = just.to;
+  say("msg-legs", updated ? "Flight updated" : `Added ${legText(just)}`, "ok");
+});
+// Paste: the server picks the flight out of the text and we fill in the
+// boxes, so the user checks (and corrects) it before tapping Add flight
+$("t-paste-fill").addEventListener("click", async () => {
+  const text = $("t-paste").value;
+  if (!text.trim()) { say("msg-paste", "Paste your flight details first", "bad"); return; }
+  const res = await api("POST", "/api/travel/parse", { text });
+  if (!res.ok) { say("msg-paste", res.body.message || "Couldn't read that", "bad"); return; }
+  const l = res.body.leg;
+  if (l.date) $("l-date").value = l.date;
+  $("l-flight").value = l.flight || ""; $("l-from").value = l.from || ""; $("l-to").value = l.to || "";
+  $("l-dep").value = toTime(l.dep); $("l-arr").value = toTime(l.arr); $("l-plus1").checked = Boolean(l.plus1);
+  $("t-paste").value = "";
+  let note = "Filled in below – check the details, then tap Add flight.";
+  if (res.body.missing.length) note += ` Couldn't find: ${res.body.missing.join(", ")}.`;
+  if (res.body.more) note += " The text seemed to hold more than one flight: this is the first, so paste the others one at a time.";
+  say("msg-paste", note, res.body.missing.length || res.body.more ? "info" : "ok");
+  $("l-add").scrollIntoView({ block: "nearest", behavior: "smooth" });
+});
+
+// ---- Travel tab: saved trips ---------------------------------------------------
+const trips = () => settings.trips || [];
+function fillTrips(selectName) {
+  const sel = $("t-trip"); sel.length = 1;
+  trips().forEach((t, i) => sel.add(new Option(`${t.name} (${t.legs.length} flight${t.legs.length === 1 ? "" : "s"})`, i)));
+  const i = trips().findIndex(t => t.name === selectName);
+  sel.value = i >= 0 ? String(i) : "";
+  $("t-trip-delete").hidden = i < 0;
+}
+$("t-trip").addEventListener("change", e => {
+  const t = trips()[e.target.value];
+  $("t-trip-delete").hidden = !t;
+  if (!t) return;
+  legs = t.legs.map(l => ({ ...l })); $("t-trip-name").value = t.name;
+  showLegs(); resetLegForm();
+  say("msg-trip", `Loaded “${t.name}”`, "info");
+});
+$("t-trip-save").addEventListener("click", async () => {
+  const name = $("t-trip-name").value.trim();
+  if (!name) { say("msg-trip", "Give the trip a name first", "bad"); return; }
+  if (!legs.length) { say("msg-trip", "Add some flights first", "bad"); return; }
+  const exists = trips().some(t => t.name.toLowerCase() === name.toLowerCase());
+  const list = trips().filter(t => t.name.toLowerCase() !== name.toLowerCase());
+  list.push({ name, legs }); list.sort((a, b) => a.name.localeCompare(b.name));
+  const err = await saveSettings({ trips: list });
+  if (err) { say("msg-trip", err, "bad"); return; }
+  fillTrips(name); saveDraft();
+  say("msg-trip", exists ? `Updated trip “${name}”` : `Saved trip “${name}” – load it from Saved trip any time`, "ok");
+});
+$("t-trip-delete").addEventListener("click", async () => {
+  const t = trips()[$("t-trip").value];
+  if (!t || !confirm(`Delete the saved trip “${t.name}”? (The flights on this page stay.)`)) return;
+  const err = await saveSettings({ trips: trips().filter(x => x !== t) });
+  if (err) { say("msg-trip", err, "bad"); return; }
+  fillTrips();
+  say("msg-trip", `Deleted trip “${t.name}”`, "ok");
+});
+$("t-clear").addEventListener("click", () => {
+  if (legs.length && !confirm("Clear all the flights on this page? (Saved trips stay.)")) return;
+  legs = []; $("t-trip-name").value = ""; $("t-trip").value = ""; $("t-trip-delete").hidden = true;
+  $("l-date").value = today(); showLegs(); resetLegForm();
+  say("msg-trip", "Flights cleared", "ok");
 });
 
 // ---- Settings tab: printer and time zone ---------------------------
@@ -371,32 +880,56 @@ function showZoneTime() {
 $("s-tz").addEventListener("change", showZoneTime);
 $("s-tz-device").addEventListener("click", () => {
   const z = deviceZone();
-  if (z && [...$("s-tz").options].some(o => o.value === z)) { $("s-tz").value = z; showZoneTime(); }
-  else setStatus("Couldn't tell this phone's time zone; pick it from the list", "bad");
+  if (z && [...$("s-tz").options].some(o => o.value === z)) {
+    $("s-tz").value = z; showZoneTime();
+    say("msg-settings", `Time zone set to ${z.replace(/_/g, " ")}. Tap Test and save to keep it.`, "info");
+  } else say("msg-settings", "Couldn't tell this device's time zone; pick it from the list", "bad");
 });
-// Describe this server's address (detected), so firewall rules are easier
-function showServer(server) {
-  if (!server) { $("s-server").textContent = "This server: couldn't check."; return; }
-  const ip = server.ip || "not detected";
-  $("s-server").textContent = server.in_docker
-    ? `This server: ${ip}, port ${server.port} (inside Docker). The printer sees connections from your NAS's own IP address, so allow that in any firewall rule.`
-    : `This server: ${ip}, port ${server.port}. Allow this address to reach the printer in any firewall rule.`;
-}
 // Save: the server tests the printer connection first and refuses to save
 // if it can't connect. The first successful save unlocks the label tabs.
+// We stay on this tab so the result is shown right under the button.
 $("s-save").addEventListener("click", async () => {
-  if (!$("s-host").value.trim()) { setStatus("Enter the printer's IP address", "bad"); return; }
-  if (!$("s-tz").value) { setStatus("Choose a time zone", "bad"); return; }
+  if (!$("s-host").value.trim()) { say("msg-settings", "Enter the printer's IP address", "bad"); return; }
+  if (!$("s-tz").value) { say("msg-settings", "Choose a time zone", "bad"); return; }
   const btn = $("s-save"), firstTime = locked;
-  btn.disabled = true; btn.textContent = "Connecting…"; setStatus("");
-  const ok = await saveSettings({ printer: printerFields(), timezone: $("s-tz").value });
+  btn.disabled = true; btn.textContent = "Connecting…"; say("msg-settings", "");
+  const err = await saveSettings({ printer: printerFields(), timezone: $("s-tz").value });
   btn.disabled = false; btn.textContent = "Test and save";
-  if (!ok) { setStatus(lastSaveError, "bad"); return; }
-  $("f-frozen").value = today(); $("b-changed").value = today();
+  if (err) { say("msg-settings", err, "bad"); return; }
+  $("f-date").value = today(); $("b-changed").value = today();
   setLocked(!isSetUp());
-  if (firstTime && !locked) { showTab("address"); setStatus("Printer connected and settings saved. You're ready to print.", "ok"); }
-  else setStatus("Printer connected and settings saved", "ok");
+  say("msg-settings", firstTime && !locked
+    ? "Printer connected and settings saved. The label tabs are unlocked – choose one at the top."
+    : "Printer connected and settings saved", "ok");
 });
+// Temperature unit: saved as soon as it's changed
+document.querySelectorAll('input[name="s-unit"]').forEach(r => r.addEventListener("change", async () => {
+  const unit = radio("settings", "s-unit");
+  const err = await saveSettings({ temp_unit: unit });
+  if (err) { say("msg-units", err, "bad"); return; }
+  showUnits();
+  say("msg-units", `Saved: food labels now use ${unit === "F" ? "°F" : "°C"}`, "ok");
+}));
+
+// ---- Settings tab: accent colour ------------------------------------
+const ACCENT_NAMES = { green: "Green", blue: "Blue", red: "Red", pink: "Pink", purple: "Purple", orange: "Orange", mono: "Monochrome" };
+// Colour the page, and remember it in this browser for the next load and
+// for the login page (which can't read settings before logging in)
+function applyAccent(name) {
+  const a = ACCENT_NAMES[name] ? name : "green";
+  document.documentElement.dataset.accent = a;
+  try { localStorage.setItem("labelprinter-accent", a); } catch (e) {}
+  setRadio("settings", "s-accent", a);
+}
+// Changing it previews at once and is saved straight away; if saving
+// fails, the previous colour comes back
+document.querySelectorAll('input[name="s-accent"]').forEach(r => r.addEventListener("change", async () => {
+  const before = settings.accent || "green", next = radio("settings", "s-accent");
+  applyAccent(next);
+  const err = await saveSettings({ accent: next });
+  if (err) { applyAccent(before); say("msg-accent", err, "bad"); return; }
+  say("msg-accent", `Saved: ${ACCENT_NAMES[next]}`, "ok");
+}));
 
 // ---- Settings tab: optional password -------------------------------
 // Show the right fields/buttons for "no password" vs "password set"
@@ -413,16 +946,14 @@ function showPasswordState() {
 }
 // Send a password change to the server; new "" removes the password
 async function sendPassword(newPassword) {
-  const r = await fetch("/api/password", { method: "PUT", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ current: $("pw-current").value, new: newPassword }) });
-  const j = await r.json().catch(() => ({ ok: false, message: "No reply from the label service" }));
-  if (j.ok) { settings.password_set = j.password_set; showPasswordState(); }
-  setStatus(j.message, j.ok ? "ok" : "bad");
+  const res = await api("PUT", "/api/password", { current: $("pw-current").value, new: newPassword });
+  if (res.ok) { settings.password_set = res.body.password_set; showPasswordState(); }
+  say("msg-pw", res.body.message || (res.ok ? "Saved" : "Couldn't change the password"), res.ok ? "ok" : "bad");
 }
 $("pw-set").addEventListener("click", () => {
   const a = $("pw-new").value, b = $("pw-confirm").value;
-  if (a.length < 8) { setStatus("Use at least 8 characters", "bad"); return; }
-  if (a !== b) { setStatus("The two new passwords don't match", "bad"); return; }
+  if (a.length < 8) { say("msg-pw", "Use at least 8 characters", "bad"); return; }
+  if (a !== b) { say("msg-pw", "The two new passwords don't match", "bad"); return; }
   sendPassword(a);
 });
 $("pw-remove").addEventListener("click", () => {
@@ -441,24 +972,34 @@ async function init() {
   try { opts = await (await fetch("/api/options")).json(); } catch (e) {}
   (opts.models || []).forEach(m => $("s-model").add(new Option(`${m.id}${m.min_length_mm > 13 ? ` (labels at least ${Math.round(m.min_length_mm)}mm)` : ""}`, m.id)));
   (opts.timezones || []).forEach(z => $("s-tz").add(new Option(z.replace(/_/g, " "), z)));
-  showServer(opts.server);
-  try {
-    const icons = await (await fetch("/api/icons")).json();
-    icons.forEach(n => $("a-icon").add(new Option(n.charAt(0).toUpperCase() + n.slice(1), n)));
-  } catch (e) {}
+  try { icons = await (await fetch("/api/icons")).json(); } catch (e) { icons = []; }
+  fillIcons("none");
   fillPresets();
+  fillTrips();
   (settings.battery_types || []).forEach(t => $("b-types").append(new Option(t)));
-  const me = settings.me || {};
-  $("t-name").value = me.name || ""; $("t-address").value = me.address || ""; $("t-phone").value = me.phone || "";
+  showMe(false);
   const pr = settings.printer || {};
   $("s-host").value = pr.host || ""; $("s-port").value = pr.port || 9100;
   if (pr.model) $("s-model").value = pr.model;
-  // Saved time zone, or suggest the phone's own until one is saved
+  // Saved time zone, or suggest this device's own until one is saved
   $("s-tz").value = settings.timezone || deviceZone();
   if (!$("s-tz").value) $("s-tz").value = "";
   showZoneTime();
+  setRadio("settings", "s-unit", settings.temp_unit || "C");
+  applyAccent(settings.accent);
+  showUnits();
   showPasswordState();
-  $("f-frozen").value = today(); $("b-changed").value = today();
+  $("f-date").value = today(); $("b-changed").value = today();
+  showStorage(false);
+  // Flights from last time (kept in this browser), then the next-flight defaults
+  try {
+    const draft = JSON.parse(localStorage.getItem("labelprinter-travel") || "{}");
+    legs = Array.isArray(draft.legs) ? draft.legs : [];
+    $("t-trip-name").value = draft.trip || "";
+  } catch (e) { legs = []; }
+  $("l-date").value = today();
+  showLegs(); resetLegForm();
+  fillTrips($("t-trip-name").value);
   let start = "address";
   try { start = localStorage.getItem("labelprinter-tab") || start; } catch (e) {}
   // Until setup is done, only the Settings tab is available

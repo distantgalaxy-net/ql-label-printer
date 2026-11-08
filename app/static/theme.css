@@ -1,0 +1,52 @@
+/*
+  labelprinter - accent colours (shared by the main page and the login page)
+  Date: 2026-11-08 23:20 GMT
+  Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
+
+  The accent colour is chosen in the Settings tab (settings.json "accent")
+  and applied as <html data-accent="...">. Each colour has a light-theme
+  and a dark-theme shade, both checked for readable contrast (WCAG AA,
+  at least 4.5:1): white text on the light shade and on-card text in the
+  light shade; dark text on the dark shade and dark-card text in it.
+  Green is the default (it's also the page's built-in colour).
+
+  To add a colour: add a light rule, a dark rule and a swatch rule here,
+  add the name to ACCENTS in main.py and a radio button in index.html.
+*/
+
+/* ---- light theme shades ---- */
+:root[data-accent="blue"]   { --accent: #2a5ea8; --accent-fg: #ffffff; }
+:root[data-accent="red"]    { --accent: #b03535; --accent-fg: #ffffff; }
+:root[data-accent="pink"]   { --accent: #ad2f6c; --accent-fg: #ffffff; }
+:root[data-accent="purple"] { --accent: #6844a8; --accent-fg: #ffffff; }
+:root[data-accent="orange"] { --accent: #a84e0c; --accent-fg: #ffffff; }
+:root[data-accent="mono"]   { --accent: #2b302d; --accent-fg: #ffffff; }
+
+/* ---- dark theme shades (lighter, with dark text on buttons) ---- */
+@media (prefers-color-scheme: dark) {
+  :root[data-accent="blue"]   { --accent: #79a9ea; --accent-fg: #0f1411; }
+  :root[data-accent="red"]    { --accent: #f08484; --accent-fg: #0f1411; }
+  :root[data-accent="pink"]   { --accent: #f08bbb; --accent-fg: #0f1411; }
+  :root[data-accent="purple"] { --accent: #ae94ec; --accent-fg: #0f1411; }
+  :root[data-accent="orange"] { --accent: #f0a35e; --accent-fg: #0f1411; }
+  :root[data-accent="mono"]   { --accent: #d4dad6; --accent-fg: #0f1411; }
+}
+
+/* ---- colour swatches for the Settings tab (match the current theme) ---- */
+.sw { display: inline-block; width: 16px; height: 16px; border-radius: 50%; flex: none; }
+.sw[data-c="green"]  { background: #2f6b4f; }
+.sw[data-c="blue"]   { background: #2a5ea8; }
+.sw[data-c="red"]    { background: #b03535; }
+.sw[data-c="pink"]   { background: #ad2f6c; }
+.sw[data-c="purple"] { background: #6844a8; }
+.sw[data-c="orange"] { background: #a84e0c; }
+.sw[data-c="mono"]   { background: #2b302d; }
+@media (prefers-color-scheme: dark) {
+  .sw[data-c="green"]  { background: #5fae86; }
+  .sw[data-c="blue"]   { background: #79a9ea; }
+  .sw[data-c="red"]    { background: #f08484; }
+  .sw[data-c="pink"]   { background: #f08bbb; }
+  .sw[data-c="purple"] { background: #ae94ec; }
+  .sw[data-c="orange"] { background: #f0a35e; }
+  .sw[data-c="mono"]   { background: #d4dad6; }
+}

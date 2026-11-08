@@ -3,7 +3,7 @@
 Read this before changing the code. It explains what we're building, the decisions already made
 and the constraints that aren't obvious from the code.
 
-_Last updated: 2026-11-08 18:06 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Last updated: 2026-11-08 23:30 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 ---
 
@@ -24,12 +24,30 @@ AB1 2CD", `192.168.1.20`, `labels.home.example`).
 
 **Built:**
 - Flask web page + JSON API, rendered with Pillow, printed with `brother_ql_next`.
-- Label types: `address` (optional icon), `freezer` (presets, use-by, cooking
-  instructions), `travel` (saved details + flights), `battery` (tiny),
-  `network` (name/IP/VLAN/MAC).
+- Label types: `address` (optional icon; custom icons uploaded/deleted in
+  the page), `food` (freezer/fridge/cupboard, use-by in days or months,
+  cooking instructions, notes, presets; `freezer` is an API alias),
+  `travel` (saved details shown locked with Edit/Clear; flights built one
+  by one or pasted, sorted, split into journeys; saved trips), `battery`
+  (tiny), `network` (name/IP/VLAN/MAC).
 - **Settings tab** holds everything install-specific: printer model, IP
-  address and port, time zone, optional password. Saved in `/data`
-  (git-ignored). `docker-compose.yml` only holds the web port.
+  address and port, time zone, temperature unit (°C/°F), accent colour,
+  optional password. Saved in `/data` (git-ignored and Docker-ignored).
+  `docker-compose.yml` only holds the web port.
+- **User data** (details, food presets, trips, custom icons) lives only in
+  `/data`. Never put any of it in the repo or the image.
+- **Accent colours** live in `app/static/theme.css` (served at
+  `/theme.css`, open without login so the login page matches). Each has a
+  light and a dark shade, checked for WCAG AA contrast (≥ 4.5:1) both as
+  button background and as text on the card. The choice is saved in
+  settings (`accent`, validated against `ACCENTS` in `main.py`) and cached
+  in the browser's localStorage so the page and login page colour
+  themselves before settings load. Success/error colours stay green/red
+  whatever the accent.
+- **Print** sits directly under the label preview (no fixed bottom bar),
+  so what you see and the button are together.
+- **Messages** appear next to the button that caused them (`say()` in
+  `index.html`, one `.msg` box per action).
 - New installs are locked to Settings until **Test and save** connects to
   the printer (`printer.verified`) and a time zone is chosen; `/api/print`
   returns 409 until then. Later saves re-test only if the address changes.
@@ -54,6 +72,12 @@ AB1 2CD", `192.168.1.20`, `labels.home.example`).
 - **Minimum length:** printers reject continuous labels shorter than their
   minimum (QL-810W: **150 dots / 12.7mm**). `labels.render()` pads short
   labels to `printer.min_length(model)`; keep that.
+- **Temperatures:** the unit comes from Settings (`temp_unit`), passed to
+  `labels.render()`. Presets store the unit they were saved in and the page
+  converts them (rounded to 5°) if the setting has changed.
+- **Custom icons:** uploads are converted server-side to a 512-dot 1-bit
+  square PNG in `/data/icons`; names are restricted (`clean_icon_name`) so
+  they can't escape that folder. Uploads are capped at 10 MB / 40 MP.
 - **Dates:** "today" uses the IANA time zone from Settings (`zoneinfo` +
   the image's `tzdata`), so DST is automatic. No `TZ` env var.
 - **Black/white only** (`red=False`). Red would need DK-22251 rolls.
@@ -96,9 +120,19 @@ app/labels.py      All label layouts + built-in icons (drawn with Pillow)
 app/printer.py     Image -> QL raster -> send to printer; models; address checks
 app/static/index.html  Phone-first page (vanilla JS, no build step)
 app/static/login.html  Password page (only used when a password is set)
+app/static/theme.css   Accent colour shades (light + dark) and swatches
 Dockerfile, .dockerignore, docker-compose.yml, requirements.txt (pinned)
 .github/workflows/docker-publish.yml   Docker Hub build (multi-arch)
 ```
+
+Flights: `labels.clean_legs` / `format_legs` / `parse_flight`. Pasting
+fills the flight boxes for the user to check (one flight at a time);
+`parse_flight` looks for each part separately (date, flight number,
+bracketed airport codes, "Departure"/"Arrival" times), so booking emails
+in any layout work. The label
+template is `1 Mar 0900-1130, XX 0123, AAA-BBB` (`+1` after a next-day
+arrival); a gap of more than a day between landing and the next take-off
+starts a new journey. The page mirrors this for its list.
 
 Adding a label type = a function in `labels.py` registered in `RENDERERS`,
 plus a `<form data-kind="...">` and tab in `index.html`. The API picks it up
@@ -151,6 +185,22 @@ image is valid for a model (it raises if the size is wrong).
   rewritten to remove personal details before any public release.
 - 2026-11-08 – Licensed under GPL v3: the printing library `brother_ql_next`
   is GPL-3.0, so the published image is bound by it anyway.
+- 2026-11-08 – Removed the "This server" IP box from Settings: inside
+  Docker only the container's internal address is visible, which misled.
+- 2026-11-08 – Freezer label widened to a Food label (freezer / fridge /
+  cupboard); `freezer` kept as an API alias and old presets migrate to
+  `food_presets` automatically. Temperature unit chosen in Settings.
+- 2026-11-08 – Feedback messages shown beside the button pressed, not at
+  the foot of the page; first-time setup stays on Settings.
+- 2026-11-08 – Custom icons can be uploaded and deleted from the page.
+- 2026-11-08 – Travel flights entered as structured legs (or pasted text)
+  and formatted by the server; trips saved in settings, the current
+  flights also kept in the browser's localStorage as a draft.
+- 2026-11-08 – Print button moved directly under the preview. Pasted
+  flight text no longer has to be one-per-line: any booking layout is
+  read into the flight boxes for checking, then added.
+- 2026-11-08 – Accent colour choice in Settings (green default; blue, red,
+  pink, purple, orange, monochrome), each tuned for light and dark themes.
 - 2026-11-08 – Distributed as a Docker Hub image built by GitHub Actions,
   so installs and updates are a download instead of copying code. `data/`
   is excluded from the build context (`.dockerignore`).
