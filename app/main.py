@@ -1,10 +1,11 @@
 # ------------------------------------------------------------------
 # labelprinter - label print service (web page + API)
-# Date: 2026-11-08 22:40 GMT (updated; first written 2026-11-07 18:10 GMT)
+# Date: 2026-11-08 23:20 GMT (updated; first written 2026-11-07 18:10 GMT)
 # Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
 #
 # Serves the phone-friendly web page and a small JSON API:
 #   GET  /                      web page
+#   GET  /theme.css             accent colours (shared with the login page)
 #   GET  /api/settings          saved details, presets, lists
 #   PUT  /api/settings          save them (whole object)
 #   GET  /api/icons             icons for address labels [{name, custom}]
@@ -63,12 +64,17 @@ DEFAULT_SETTINGS = {
     "timezone": "",
     # Cooking temperatures on food labels: "C" (°C) or "F" (°F)
     "temp_unit": "C",
+    # Page accent colour, one of ACCENTS (chosen in the Settings tab)
+    "accent": "green",
     # Saved foods: everything on the form except the date
     "food_presets": [],
     # Saved trips for travel labels: [{"name": ..., "legs": [...]}]
     "trips": [],
     "battery_types": ["CR2032", "CR2450", "CR2", "CR123A", "AA", "AAA", "9V"],
 }
+
+# Accent colours the page offers (shades are in static/theme.css)
+ACCENTS = ("green", "blue", "red", "pink", "purple", "orange", "mono")
 
 # Every time zone the container's tz database knows, sorted for the dropdown
 TIMEZONES = sorted(available_timezones())
@@ -88,9 +94,9 @@ app.config.update(
     PERMANENT_SESSION_LIFETIME=session_lifetime(),
 )
 
-# Paths that work without logging in: the login page itself, the login
-# call, and the Docker health check.
-OPEN_PATHS = {"/login", "/api/login", "/health"}
+# Paths that work without logging in: the login page itself, its colours,
+# the login call, and the Docker health check.
+OPEN_PATHS = {"/login", "/theme.css", "/api/login", "/health"}
 
 
 def logged_in():
@@ -219,6 +225,12 @@ def index():
     return send_from_directory(STATIC, "index.html")
 
 
+@app.get("/theme.css")
+def theme_css():
+    """Accent colour shades, used by both the main page and the login page."""
+    return send_from_directory(STATIC, "theme.css", mimetype="text/css")
+
+
 @app.get("/labeldesigner")
 def old_link():
     """Keep the old bookmark working."""
@@ -261,6 +273,8 @@ def put_settings():
         body["printer"] = {"host": host, "port": port, "model": model, "verified": True}
     if "timezone" in body and body["timezone"] not in TIMEZONES:
         return jsonify({"ok": False, "message": f"'{body['timezone']}' isn't a known time zone."}), 400
+    if "accent" in body and body["accent"] not in ACCENTS:
+        return jsonify({"ok": False, "message": f"'{body['accent']}' isn't one of the colours."}), 400
     if "temp_unit" in body and body["temp_unit"] not in ("C", "F"):
         return jsonify({"ok": False, "message": "The temperature unit must be C or F."}), 400
     for key in ("food_presets", "trips", "battery_types"):

@@ -1,11 +1,11 @@
 <!doctype html>
 <!--
   labelprinter - label printing page (phone-first)
-  Date: 2026-11-08 23:05 GMT (updated; first written 2026-11-07 18:15 GMT)
+  Date: 2026-11-08 23:20 GMT (updated; first written 2026-11-07 18:15 GMT)
   Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
   One form per label type; the preview updates as you type, then Print.
   The Settings tab holds the printer (model, IP address, port), the time
-  zone and the temperature unit (saved on the server), so no home details
+  zone, the temperature unit and the accent colour (saved on the server), so no home details
   are built into the page or the image. Until the printer has been saved
   with a successful connection test (and a time zone chosen), only the
   Settings tab works.
@@ -21,6 +21,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Label Printer</title>
+<link rel="stylesheet" href="/theme.css">
+<script>
+  // Apply the last-used accent colour straight away (before settings load),
+  // so the page doesn't flash green first. Shades are in theme.css.
+  try { document.documentElement.dataset.accent = localStorage.getItem("labelprinter-accent") || "green"; } catch (e) {}
+</script>
 <style>
   :root {
     --bg: #f3f4f1; --card: #ffffff; --fg: #1d2420; --muted: #5d6a63; --line: #d9ddd7;
@@ -58,6 +64,8 @@
     border-radius: 8px; padding: 8px 10px; background: var(--field); cursor: pointer; }
   .seg label:has(input:checked) { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
   .seg input { width: auto; }
+  /* Radio buttons and tick boxes follow the chosen accent colour */
+  input[type="radio"], input[type="checkbox"] { accent-color: var(--accent); }
   .check { display: flex; align-items: center; gap: 8px; color: var(--fg); }
   .check input { width: auto; }
   .small { font-size: .85rem; color: var(--muted); margin: 0; }
@@ -323,6 +331,19 @@
         <label><input type="radio" name="s-unit" value="F"> °F (Fahrenheit)</label>
       </div>
       <p class="msg" id="msg-units" role="status"></p>
+
+      <h2>Colour</h2>
+      <p class="small">The accent colour for buttons and tabs. Each has a light and a dark shade to suit your device's theme. Saved straight away.</p>
+      <div class="seg" role="radiogroup" aria-label="Accent colour">
+        <label><input type="radio" name="s-accent" value="green"><span class="sw" data-c="green"></span> Green</label>
+        <label><input type="radio" name="s-accent" value="blue"><span class="sw" data-c="blue"></span> Blue</label>
+        <label><input type="radio" name="s-accent" value="red"><span class="sw" data-c="red"></span> Red</label>
+        <label><input type="radio" name="s-accent" value="pink"><span class="sw" data-c="pink"></span> Pink</label>
+        <label><input type="radio" name="s-accent" value="purple"><span class="sw" data-c="purple"></span> Purple</label>
+        <label><input type="radio" name="s-accent" value="orange"><span class="sw" data-c="orange"></span> Orange</label>
+        <label><input type="radio" name="s-accent" value="mono"><span class="sw" data-c="mono"></span> Monochrome</label>
+      </div>
+      <p class="msg" id="msg-accent" role="status"></p>
 
       <h2>Password (optional)</h2>
       <p class="small" id="pw-state"></p>
@@ -890,6 +911,26 @@ document.querySelectorAll('input[name="s-unit"]').forEach(r => r.addEventListene
   say("msg-units", `Saved: food labels now use ${unit === "F" ? "°F" : "°C"}`, "ok");
 }));
 
+// ---- Settings tab: accent colour ------------------------------------
+const ACCENT_NAMES = { green: "Green", blue: "Blue", red: "Red", pink: "Pink", purple: "Purple", orange: "Orange", mono: "Monochrome" };
+// Colour the page, and remember it in this browser for the next load and
+// for the login page (which can't read settings before logging in)
+function applyAccent(name) {
+  const a = ACCENT_NAMES[name] ? name : "green";
+  document.documentElement.dataset.accent = a;
+  try { localStorage.setItem("labelprinter-accent", a); } catch (e) {}
+  setRadio("settings", "s-accent", a);
+}
+// Changing it previews at once and is saved straight away; if saving
+// fails, the previous colour comes back
+document.querySelectorAll('input[name="s-accent"]').forEach(r => r.addEventListener("change", async () => {
+  const before = settings.accent || "green", next = radio("settings", "s-accent");
+  applyAccent(next);
+  const err = await saveSettings({ accent: next });
+  if (err) { applyAccent(before); say("msg-accent", err, "bad"); return; }
+  say("msg-accent", `Saved: ${ACCENT_NAMES[next]}`, "ok");
+}));
+
 // ---- Settings tab: optional password -------------------------------
 // Show the right fields/buttons for "no password" vs "password set"
 function showPasswordState() {
@@ -945,6 +986,7 @@ async function init() {
   if (!$("s-tz").value) $("s-tz").value = "";
   showZoneTime();
   setRadio("settings", "s-unit", settings.temp_unit || "C");
+  applyAccent(settings.accent);
   showUnits();
   showPasswordState();
   $("f-date").value = today(); $("b-changed").value = today();

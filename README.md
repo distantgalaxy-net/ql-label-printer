@@ -3,7 +3,7 @@
 Print useful labels on a Brother QL label printer from your phone or from
 Home Assistant.
 
-_Updated: 2026-11-08 22:45 GMT · Developer: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Updated: 2026-11-08 23:30 GMT · Developer: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 A small self-hosted web service, run in Docker (for example on a Synology
 NAS). It prints on a network-connected Brother QL printer from a
@@ -126,6 +126,9 @@ A new install opens on the **Settings** tab with the label tabs locked:
   "Setup isn't finished".)
 - **Temperature unit:** °C or °F for cooking temperatures on food labels
   (saved as soon as you choose).
+- **Colour:** the page's accent colour – green, blue, red, pink, purple,
+  orange or monochrome. Each has a light and a dark shade that follows
+  your device's light/dark theme (saved as soon as you choose).
 
 If a firewall sits between the host and the printer, allow the host's own
 IP address (e.g. your NAS's) to reach the printer on the printer port.
@@ -264,7 +267,7 @@ data:
 |---|---|
 | `POST /api/preview/<type>` | PNG preview (header `X-Label-Length-mm`) |
 | `POST /api/print/<type>` | Print → `{"ok": true/false, "message": "…"}` (add `"copies": n`) |
-| `GET/PUT /api/settings` | Saved details (`me`), `food_presets`, `trips`, battery types, `printer` (`host`, `port`, `model`), `timezone` (e.g. `Europe/London`), `temp_unit` (`C`/`F`); `password_set` is read-only |
+| `GET/PUT /api/settings` | Saved details (`me`), `food_presets`, `trips`, battery types, `printer` (`host`, `port`, `model`), `timezone` (e.g. `Europe/London`), `temp_unit` (`C`/`F`), `accent` (`green`/`blue`/`red`/`pink`/`purple`/`orange`/`mono`); `password_set` is read-only |
 | `GET /api/options` | Printer models and time zone names |
 | `POST /api/printer/test` | Check the printer can be reached without printing (body `host`/`port`, or empty to test the saved one) |
 | `GET /api/icons` | Icons: `[{"name", "custom"}]` |

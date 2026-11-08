@@ -3,7 +3,7 @@
 Read this before changing the code. It explains what we're building, the decisions already made
 and the constraints that aren't obvious from the code.
 
-_Last updated: 2026-11-08 22:45 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Last updated: 2026-11-08 23:30 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 ---
 
@@ -31,11 +31,19 @@ AB1 2CD", `192.168.1.20`, `labels.home.example`).
   by one or pasted, sorted, split into journeys; saved trips), `battery`
   (tiny), `network` (name/IP/VLAN/MAC).
 - **Settings tab** holds everything install-specific: printer model, IP
-  address and port, time zone, temperature unit (°C/°F), optional
-  password. Saved in `/data` (git-ignored and Docker-ignored).
+  address and port, time zone, temperature unit (°C/°F), accent colour,
+  optional password. Saved in `/data` (git-ignored and Docker-ignored).
   `docker-compose.yml` only holds the web port.
 - **User data** (details, food presets, trips, custom icons) lives only in
   `/data`. Never put any of it in the repo or the image.
+- **Accent colours** live in `app/static/theme.css` (served at
+  `/theme.css`, open without login so the login page matches). Each has a
+  light and a dark shade, checked for WCAG AA contrast (≥ 4.5:1) both as
+  button background and as text on the card. The choice is saved in
+  settings (`accent`, validated against `ACCENTS` in `main.py`) and cached
+  in the browser's localStorage so the page and login page colour
+  themselves before settings load. Success/error colours stay green/red
+  whatever the accent.
 - **Print** sits directly under the label preview (no fixed bottom bar),
   so what you see and the button are together.
 - **Messages** appear next to the button that caused them (`say()` in
@@ -112,6 +120,7 @@ app/labels.py      All label layouts + built-in icons (drawn with Pillow)
 app/printer.py     Image -> QL raster -> send to printer; models; address checks
 app/static/index.html  Phone-first page (vanilla JS, no build step)
 app/static/login.html  Password page (only used when a password is set)
+app/static/theme.css   Accent colour shades (light + dark) and swatches
 Dockerfile, .dockerignore, docker-compose.yml, requirements.txt (pinned)
 .github/workflows/docker-publish.yml   Docker Hub build (multi-arch)
 ```
@@ -190,6 +199,8 @@ image is valid for a model (it raises if the size is wrong).
 - 2026-11-08 – Print button moved directly under the preview. Pasted
   flight text no longer has to be one-per-line: any booking layout is
   read into the flight boxes for checking, then added.
+- 2026-11-08 – Accent colour choice in Settings (green default; blue, red,
+  pink, purple, orange, monochrome), each tuned for light and dark themes.
 - 2026-11-08 – Distributed as a Docker Hub image built by GitHub Actions,
   so installs and updates are a download instead of copying code. `data/`
   is excluded from the build context (`.dockerignore`).
