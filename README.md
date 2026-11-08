@@ -3,7 +3,7 @@
 Print useful labels on a Brother QL label printer from your phone or from
 Home Assistant.
 
-_Updated: 2026-11-08 17:38 GMT · Developer: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Updated: 2026-11-08 17:47 GMT · Developer: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 A small self-hosted web service, run in Docker (for example on a Synology
 NAS). It prints on a network-connected Brother QL printer from a
@@ -227,3 +227,16 @@ Fields:
 
 Address lookup from Google Contacts · guest Wi-Fi vouchers from UniFi as QR
 labels · picking network and battery devices from Home Assistant.
+
+## Licence
+
+LabelPrinter is free software, released under the
+[GNU General Public License v3.0](LICENSE). You can use, change and share
+it, including commercially; if you share a changed version, it must stay
+under the same licence with its source code available. It comes with no
+warranty.
+
+It is built on [`brother_ql_next`](https://pypi.org/project/brother_ql_next/)
+(GPL-3.0), which turns labels into the printer's commands – which is why
+this project uses the GPL too. The other libraries it uses (Flask, Werkzeug,
+Pillow, waitress) have permissive licences compatible with the GPL.

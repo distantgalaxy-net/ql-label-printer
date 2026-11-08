@@ -3,7 +3,7 @@
 Read this before changing the code. It explains what we're building, the decisions already made
 and the constraints that aren't obvious from the code.
 
-_Last updated: 2026-11-08 17:38 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Last updated: 2026-11-08 17:47 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 ---
 
@@ -110,6 +110,9 @@ automatically.
   whenever you change a file.
 - **UK English**, UK date format on labels (`7 Nov 2026`), °C.
 - Keep dependencies pinned; prefer the standard library and small libraries.
+- **Licence:** GPL v3 (`LICENSE`), because `brother_ql_next` is GPL-3.0.
+  New dependencies must have a GPL-compatible licence (e.g. MIT, BSD,
+  Apache-2.0, LGPL); check before adding one.
 - Work on a branch and open a pull request; don't commit straight to `main`.
 
 ## Testing without the printer
@@ -143,3 +146,5 @@ image is valid for a model (it raises if the size is wrong).
 - 2026-11-08 – Optional password (Settings tab, scrypt hash, off by default).
   Project renamed from its original host-name to `labelprinter`; history
   rewritten to remove personal details before any public release.
+- 2026-11-08 – Licensed under GPL v3: the printing library `brother_ql_next`
+  is GPL-3.0, so the published image is bound by it anyway.
