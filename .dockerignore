@@ -1,0 +1,14 @@
+# ------------------------------------------------------------------
+# ql-label-printer - files never sent into a Docker build
+# Date: 2026-11-08 18:05 GMT
+# Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
+# The image only needs requirements.txt and app/. Keeping data/ out
+# guarantees saved settings, passwords and icons can't end up in a
+# published image.
+# ------------------------------------------------------------------
+data/
+.git/
+.github/
+docs/
+**/__pycache__/
+*.pyc

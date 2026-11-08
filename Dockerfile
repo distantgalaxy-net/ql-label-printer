@@ -1,8 +1,9 @@
 # ------------------------------------------------------------------
 # labelprinter - label print service image
-# Date: 2026-11-08 16:01 GMT (updated; first written 2026-11-07 18:30 GMT)
+# Date: 2026-11-08 18:05 GMT (updated; first written 2026-11-07 18:30 GMT)
 # Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
-# Built by Container Manager from this folder (see docker-compose.yml).
+# Published to Docker Hub as distantgalaxy/ql-label-printer by the GitHub
+# workflow in .github/workflows/docker-publish.yml (amd64 + arm64).
 # ------------------------------------------------------------------
 FROM python:3.12-slim
 

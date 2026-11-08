@@ -1,18 +1,21 @@
 # ------------------------------------------------------------------
 # labelprinter - Brother QL label print service
-# Date: 2026-11-08 16:01 GMT (updated; first written 2026-11-07 18:30 GMT)
+# Date: 2026-11-08 18:05 GMT (updated; first written 2026-11-07 18:30 GMT)
 # Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
 #
-# Builds the image from the Dockerfile in this folder and serves the
-# web page on port 8013. Everything else is set in the page's Settings
+# Runs the published image from Docker Hub (distantgalaxy/ql-label-printer)
+# and serves the web page on port 8013. This file plus an empty data/
+# folder is all you need - no code to download. Everything else is set in the page's Settings
 # tab and saved in ./data: printer model, IP address and port, time
 # zone and the optional password. Only the 62mm continuous roll
 # (DK-22205) is supported.
 # ------------------------------------------------------------------
 services:
   labelprinter:
-    build: .                              # build from ./Dockerfile
-    image: labelprinter:latest
+    # "latest" = newest release. To stay on one version, use e.g. :1.0.0
+    image: distantgalaxy/ql-label-printer:latest
+    # Developers: to build from this repo's code instead, replace the line
+    # above with "build: ."
     container_name: labelprinter
     restart: unless-stopped
     ports:

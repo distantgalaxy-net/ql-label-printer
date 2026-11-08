@@ -3,7 +3,7 @@
 Read this before changing the code. It explains what we're building, the decisions already made
 and the constraints that aren't obvious from the code.
 
-_Last updated: 2026-11-08 17:47 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Last updated: 2026-11-08 18:06 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 ---
 
@@ -41,7 +41,6 @@ AB1 2CD", `192.168.1.20`, `labels.home.example`).
 - Guest Wi-Fi: per-guest UniFi hotspot vouchers printed as QR/code labels.
 - Pick network devices and battery devices from Home Assistant (battery
   labels must still work for devices not in HA).
-- Publishing: GitHub Actions building a multi-arch image to Docker Hub.
 
 ## Hard constraints
 
@@ -80,8 +79,11 @@ AB1 2CD", `192.168.1.20`, `labels.home.example`).
 
 ## Where it runs
 
-- Docker; documented for Synology **Container Manager** (DSM 7.2), built
-  from this repo's `Dockerfile` via `docker-compose.yml`.
+- Docker. Published image: **`distantgalaxy/ql-label-printer`** on Docker Hub
+  (amd64 + arm64), built by `.github/workflows/docker-publish.yml` when a
+  `v*.*.*` tag is pushed (tags `x.y.z`, `x.y`, `latest`) or by hand (tag =
+  branch name). `docker-compose.yml` uses the published image; developers
+  swap `image:` for `build: .`. Documented for Synology Container Manager.
 - Home Assistant (container, host networking) on the same host can call
   `http://127.0.0.1:8013/api/print/<type>`.
 
@@ -94,7 +96,8 @@ app/labels.py      All label layouts + built-in icons (drawn with Pillow)
 app/printer.py     Image -> QL raster -> send to printer; models; address checks
 app/static/index.html  Phone-first page (vanilla JS, no build step)
 app/static/login.html  Password page (only used when a password is set)
-Dockerfile, docker-compose.yml, requirements.txt (pinned)
+Dockerfile, .dockerignore, docker-compose.yml, requirements.txt (pinned)
+.github/workflows/docker-publish.yml   Docker Hub build (multi-arch)
 ```
 
 Adding a label type = a function in `labels.py` registered in `RENDERERS`,
@@ -148,3 +151,6 @@ image is valid for a model (it raises if the size is wrong).
   rewritten to remove personal details before any public release.
 - 2026-11-08 – Licensed under GPL v3: the printing library `brother_ql_next`
   is GPL-3.0, so the published image is bound by it anyway.
+- 2026-11-08 – Distributed as a Docker Hub image built by GitHub Actions,
+  so installs and updates are a download instead of copying code. `data/`
+  is excluded from the build context (`.dockerignore`).

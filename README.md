@@ -3,7 +3,7 @@
 Print useful labels on a Brother QL label printer from your phone or from
 Home Assistant.
 
-_Updated: 2026-11-08 17:47 GMT · Developer: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Updated: 2026-11-08 18:06 GMT · Developer: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 A small self-hosted web service, run in Docker (for example on a Synology
 NAS). It prints on a network-connected Brother QL printer from a
@@ -57,22 +57,21 @@ smallest label your printer allows) · Network device (name, IP, VLAN, MAC).
 
 ## Install on a Synology NAS (Container Manager)
 
-The NAS needs internet access while it builds (it downloads Python and the
-packages once).
+The image is published on Docker Hub as
+[`distantgalaxy/ql-label-printer`](https://hub.docker.com/r/distantgalaxy/ql-label-printer)
+for Intel/AMD and ARM, so there's no code to download.
 
-1. **Copy the files in.** On GitHub use **Code → Download ZIP**. In File
-   Station, create a folder such as `docker/labelprinter`, upload the ZIP,
-   right-click it → **Extract → Extract here**, then move the contents of the
-   extracted `LabelPrinter-main` folder up into `docker/labelprinter`:
-   ```
-   docker/labelprinter/
-     docker-compose.yml  Dockerfile  requirements.txt  README.md
-     app/   (main.py, labels.py, printer.py, auth.py, static/)
-     data/  (icons/)
-   ```
+1. **Make a folder.** In File Station, create `docker/ql-label-printer`
+   and, inside it, an empty folder called `data`. Your settings are saved
+   there.
 2. **Create the project.** Container Manager → **Project** → **Create**:
-   name `labelprinter`, path `docker/labelprinter`, Source → **Use existing
-   docker-compose.yml** → Next → Done. The first build takes a few minutes.
+   - Project name: `ql-label-printer`
+   - Path: `docker/ql-label-printer`
+   - Source: **Create docker-compose.yml**, and paste in the contents of
+     [`docker-compose.yml`](docker-compose.yml) from this repo.
+   - Next → (skip the web portal option) → **Done**.
+
+   Container Manager downloads the image and starts it.
 3. **Check it.** Container Manager → **Container** → `labelprinter` should
    show **Running**, then **healthy**.
 4. **Make it reachable.** The container only listens on the NAS itself
@@ -84,14 +83,21 @@ packages once).
 
 ### Other Docker hosts
 
-From the project folder:
+Put [`docker-compose.yml`](docker-compose.yml) in a folder, then from that
+folder:
 
 ```bash
-docker compose up -d --build
+docker compose up -d
 ```
 
 Then open `http://<host>:8013` from the host itself, or through your own
 reverse proxy. See the comments in `docker-compose.yml` for changing the port.
+
+### Building it yourself
+
+To run your own changes instead of the published image, clone this repo,
+replace the `image:` line in `docker-compose.yml` with `build: .`, and run
+`docker compose up -d --build`.
 
 ## The web port
 
@@ -146,10 +152,34 @@ To turn it on, open **Settings → Password (optional)**, enter a new password
 
 ## Updating to a new version
 
-1. Download the latest ZIP from GitHub and upload it over your project
-   folder (don't overwrite `data/`).
-2. Container Manager → **Project** → `labelprinter` → **Action → Build** (or
-   Stop, then Start with "rebuild"). Your settings and presets are kept.
+Releases are listed on the GitHub **Releases** page. Your settings in
+`data/` are kept across updates.
+
+- **Synology:** Container Manager → **Project** → `ql-label-printer` →
+  **Action → Stop**, then **Action → Build**. That downloads the newest
+  image and starts it again. (Alternatively: **Image** →
+  `distantgalaxy/ql-label-printer` → **Update**, then restart the project.)
+- **Other hosts:**
+  ```bash
+  docker compose pull && docker compose up -d
+  ```
+- **Staying on a version:** change `:latest` in `docker-compose.yml` to a
+  release number, e.g. `:1.0.0`.
+
+## Publishing a release (maintainers)
+
+The GitHub workflow `.github/workflows/docker-publish.yml` builds the image
+for amd64 and arm64 and pushes it to Docker Hub:
+
+- **Release:** GitHub → **Releases → Draft a new release**, create a tag
+  like `v1.0.0`, publish. The image is tagged `1.0.0`, `1.0` and `latest`.
+- **Test build:** **Actions → Publish Docker image → Run workflow** builds
+  the chosen branch and tags it with the branch name (e.g. `main`), without
+  touching `latest`.
+
+It needs a repository variable `DOCKERHUB_USERNAME` and a secret
+`DOCKERHUB_TOKEN` (a Docker Hub access token with Read & Write) under
+Settings → Secrets and variables → Actions.
 
 ## Your own icons
 
