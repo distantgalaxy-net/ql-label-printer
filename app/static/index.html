@@ -1,12 +1,13 @@
 <!doctype html>
 <!--
   labelprinter - label printing page (phone-first)
-  Date: 2026-11-08 09:38 GMT (updated; first written 2026-11-07 18:15 GMT)
+  Date: 2026-11-08 09:46 GMT (updated; first written 2026-11-07 18:15 GMT)
   Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
   One form per label type; the preview updates as you type, then Print.
   The Settings tab holds the printer (model, IP address, port) and the time
   zone (saved on the server), so no home details are built into the page
-  or the image.
+  or the image. Until the printer has been saved with a successful
+  connection test (and a time zone chosen), only the Settings tab works.
 -->
 <html lang="en-GB">
 <head>
@@ -32,6 +33,7 @@
   nav { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 12px; }
   nav button { flex: none; border: 1px solid var(--line); background: var(--card); color: var(--fg);
     padding: 8px 14px; border-radius: 999px; font: inherit; font-size: .95rem; cursor: pointer; }
+  nav button:disabled { opacity: .4; cursor: not-allowed; }
   nav button[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
   form { display: grid; gap: 12px; }
@@ -151,6 +153,7 @@
 
     <!-- Settings: not a label, so the preview and Print bar are hidden on this tab -->
     <form data-kind="settings" hidden>
+      <p class="info" id="s-welcome" hidden><strong>Welcome!</strong> Set up your printer to get started. Tap <strong>Test and save</strong>: it checks it can reach the printer, then unlocks the label tabs.</p>
       <h2>Printer</h2>
       <p class="small">Where to send labels. The printer needs a fixed IP address (set a DHCP reservation in your router) and must accept raw printing on the port below. Only the 62mm continuous roll (DK-22205) is supported.</p>
       <label>Printer model<select id="s-model"></select></label>
@@ -166,8 +169,7 @@
       <button type="button" class="linkbtn" id="s-tz-device">Use this phone's time zone</button>
       <p class="small" id="s-tz-now">Used for today's date on labels. Daylight saving (e.g. GMT → BST) changes automatically.</p>
       <div class="actions">
-        <button type="button" class="btn2 primary" id="s-save">Save</button>
-        <button type="button" class="btn2" id="s-test">Test connection</button>
+        <button type="button" class="btn2 primary" id="s-save">Test and save</button>
       </div>
     </form>
 
@@ -213,9 +215,23 @@ function formData(k) {
 function setStatus(msg, cls) { const s = $("status"); s.textContent = msg || ""; s.className = cls || ""; }
 
 // ---- tabs --------------------------------------------------------
+// True until the printer is saved (connection tested) and a time zone chosen
+let locked = true;
+function isSetUp() {
+  const pr = settings.printer || {};
+  return Boolean(pr.host && pr.verified && settings.timezone);
+}
+// Lock or unlock the label tabs, and show the welcome note while locked
+function setLocked(value) {
+  locked = value;
+  document.querySelectorAll("#tabs button").forEach(b => { if (b.dataset.kind !== "settings") b.disabled = value; });
+  $("s-welcome").hidden = !value;
+}
+
 // Show one tab's form. The Settings tab isn't a label, so it hides the
 // preview and the Print bar and skips the preview request.
 function showTab(k) {
+  if (locked && k !== "settings") return;   // labels stay locked until setup is done
   kind = k;
   const isSettings = k === "settings";
   document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.kind === k)));
@@ -273,9 +289,11 @@ async function saveSettings(patch) {
   lastSaveError = "";
   try {
     const r = await fetch("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) });
-    if (!r.ok) { lastSaveError = ((await r.json().catch(() => ({}))).message) || "Couldn't save"; return false; }
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { lastSaveError = j.message || "Couldn't save"; return false; }
+    // The server replies with what it saved (including printer "verified")
+    if (j.settings) settings = j.settings; else Object.assign(settings, patch);
   } catch (e) { lastSaveError = "Can't reach the label service"; return false; }
-  Object.assign(settings, patch);
   return true;
 }
 
@@ -322,7 +340,7 @@ function showZoneTime() {
   if (!tz) { $("s-tz-now").textContent = "Used for today's date on labels. Daylight saving (e.g. GMT → BST) changes automatically."; return; }
   try {
     const now = new Intl.DateTimeFormat("en-GB", { timeZone: tz, weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZoneName: "short" }).format(new Date());
-    $("s-tz-now").textContent = `Now there: ${now}. Daylight saving changes automatically.`;
+    $("s-tz-now").textContent = `Current time: ${now}. Daylight saving changes automatically.`;
   } catch (e) { $("s-tz-now").textContent = ""; }
 }
 $("s-tz").addEventListener("change", showZoneTime);
@@ -339,22 +357,20 @@ function showServer(server) {
     ? `This server: ${ip}, port ${server.port} (inside Docker). The printer sees connections from your NAS's own IP address, so allow that in any firewall rule.`
     : `This server: ${ip}, port ${server.port}. Allow this address to reach the printer in any firewall rule.`;
 }
+// Save: the server tests the printer connection first and refuses to save
+// if it can't connect. The first successful save unlocks the label tabs.
 $("s-save").addEventListener("click", async () => {
+  if (!$("s-host").value.trim()) { setStatus("Enter the printer's IP address", "bad"); return; }
   if (!$("s-tz").value) { setStatus("Choose a time zone", "bad"); return; }
+  const btn = $("s-save"), firstTime = locked;
+  btn.disabled = true; btn.textContent = "Connecting…"; setStatus("");
   const ok = await saveSettings({ printer: printerFields(), timezone: $("s-tz").value });
-  setStatus(ok ? "Settings saved" : lastSaveError, ok ? "ok" : "bad");
-  if (ok) { $("f-frozen").value = today(); $("b-changed").value = today(); }
-});
-// Test the address in the boxes (saved or not) without printing anything
-$("s-test").addEventListener("click", async () => {
-  const btn = $("s-test");
-  btn.disabled = true; btn.textContent = "Testing…"; setStatus("");
-  try {
-    const r = await fetch("/api/printer/test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(printerFields()) });
-    const j = await r.json().catch(() => ({ ok: false, message: "No reply from the label service" }));
-    setStatus(j.message, j.ok ? "ok" : "bad");
-  } catch (e) { setStatus("Can't reach the label service", "bad"); }
-  btn.disabled = false; btn.textContent = "Test connection";
+  btn.disabled = false; btn.textContent = "Test and save";
+  if (!ok) { setStatus(lastSaveError, "bad"); return; }
+  $("f-frozen").value = today(); $("b-changed").value = today();
+  setLocked(!isSetUp());
+  if (firstTime && !locked) { showTab("address"); setStatus("Printer connected and settings saved. You're ready to print.", "ok"); }
+  else setStatus("Printer connected and settings saved", "ok");
 });
 
 // Load settings and lists, fill the forms, then open the last-used tab
@@ -384,11 +400,10 @@ async function init() {
   $("f-frozen").value = today(); $("b-changed").value = today();
   let start = "address";
   try { start = localStorage.getItem("labelprinter-tab") || start; } catch (e) {}
-  // Until the printer and time zone are saved, open on the Settings tab
-  const needsSetup = !pr.host || !settings.timezone;
-  if (needsSetup) start = "settings";
+  // Until setup is done, only the Settings tab is available
+  setLocked(!isSetUp());
+  if (locked) start = "settings";
   showTab(start);
-  if (needsSetup) setStatus("Finish setting up: check the printer and time zone, then tap Save.", "bad");
 }
 init();
 </script>

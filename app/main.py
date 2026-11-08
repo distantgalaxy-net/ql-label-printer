@@ -1,6 +1,6 @@
 # ------------------------------------------------------------------
 # labelprinter - label print service (web page + API)
-# Date: 2026-11-08 09:38 GMT (updated; first written 2026-11-07 18:10 GMT)
+# Date: 2026-11-08 09:46 GMT (updated; first written 2026-11-07 18:10 GMT)
 # Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
 #
 # Serves the phone-friendly web page and a small JSON API:
@@ -20,7 +20,9 @@
 #
 # The printer (model, IP address, port) and the time zone are saved from
 # the Settings tab (settings.json), not hard-coded, so each install sets
-# its own.
+# its own. A printer address is only saved once a test connection to it
+# succeeds ("verified"); until then the page and print API stay locked
+# to setup, so a new install can't be used before it can actually print.
 # ------------------------------------------------------------------
 import io
 import json
@@ -43,7 +45,9 @@ DEFAULT_SETTINGS = {
     "me": {"name": "", "address": "", "phone": ""},
     # Printer: blank address until set in the Settings tab.
     # 9100 is Brother's standard raw printing port.
-    "printer": {"host": "", "port": printer.DEFAULT_PORT, "model": printer.DEFAULT_MODEL},
+    # "verified" is set by the server when a connection test passes on save.
+    "printer": {"host": "", "port": printer.DEFAULT_PORT, "model": printer.DEFAULT_MODEL,
+                "verified": False},
     # IANA time zone name (e.g. "Europe/London"); blank until set. Used for
     # "today" on labels; daylight saving changes are applied automatically.
     "timezone": "",
@@ -70,6 +74,20 @@ def load_settings():
     # Older files may lack newer printer fields (e.g. model): fill them in
     merged["printer"] = {**DEFAULT_SETTINGS["printer"], **(saved.get("printer") or {})}
     return merged
+
+
+def setup_problem(s):
+    """Why this install can't print yet (a message), or None if setup is done.
+
+    Setup is done once a printer has been saved after a successful
+    connection test, and a time zone has been chosen.
+    """
+    p = s.get("printer") or {}
+    if not p.get("host") or not p.get("verified"):
+        return "Setup isn't finished: add the printer in the Settings tab and save (it tests the connection)."
+    if not s.get("timezone"):
+        return "Setup isn't finished: choose a time zone in the Settings tab."
+    return None
 
 
 def save_settings(data):
@@ -105,7 +123,9 @@ def put_settings():
 
     "printer" and "timezone" entries are checked first, so a bad IP
     address, port, model or time zone is refused with a message instead
-    of being saved.
+    of being saved. A new or changed printer address is also connected to
+    first: if the printer can't be reached, nothing is saved.
+    Replies with the saved settings so the page can see "verified".
     """
     body = request.get_json(silent=True)
     if not isinstance(body, dict):
@@ -118,14 +138,20 @@ def put_settings():
         model = p.get("model") or printer.DEFAULT_MODEL
         if model not in printer.NETWORK_MODELS:
             return jsonify({"ok": False, "message": f"'{model}' isn't a supported printer model."}), 400
-        body["printer"] = {"host": host, "port": port, "model": model}
+        # Test the connection unless this exact address was already verified
+        saved = load_settings()["printer"]
+        if not (saved.get("verified") and saved.get("host") == host and saved.get("port") == port):
+            ok, message = printer.test_connection(host, port)
+            if not ok:
+                return jsonify({"ok": False, "message": f"Not saved. {message}"}), 400
+        body["printer"] = {"host": host, "port": port, "model": model, "verified": True}
     if "timezone" in body and body["timezone"] not in TIMEZONES:
         return jsonify({"ok": False, "message": f"'{body['timezone']}' isn't a known time zone."}), 400
     with _settings_lock:
         merged = load_settings()
         merged.update({k: v for k, v in body.items() if k in DEFAULT_SETTINGS})
         save_settings(merged)
-    return jsonify({"ok": True})
+    return jsonify({"ok": True, "settings": merged})
 
 
 @app.get("/api/options")
@@ -182,6 +208,9 @@ def preview(kind):
 @app.post("/api/print/<kind>")
 def do_print(kind):
     """Render a label and send it to the printer saved in settings."""
+    problem = setup_problem(load_settings())
+    if problem:
+        return jsonify({"ok": False, "message": problem}), 409
     img, err = _render_from_request(kind)
     if err:
         return err

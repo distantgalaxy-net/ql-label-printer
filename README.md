@@ -111,9 +111,11 @@ never forward it from the internet.
 ## First-time setup in the page
 
 - **Settings tab (do this first):** pick your **printer model**, enter its
-  **IP address** and **port** (Brother printers use **9100**), tap
-  **Test connection**, check the **time zone** (it suggests your phone's),
-  then **Save**. The page opens on this tab until both are saved.
+  **IP address** and **port** (Brother printers use **9100**), check the
+  **time zone** (it suggests your phone's), then tap **Test and save**.
+  It connects to the printer first and only saves if that works. Until then
+  the label tabs are locked (and the print API replies "Setup isn't
+  finished"), so a new install can't be used before it can print.
   - Give the printer a fixed IP (a DHCP reservation in your router).
   - The time zone sets "today" on freezer and battery labels. Daylight
     saving (e.g. GMT ↔ BST) is handled automatically.

@@ -147,3 +147,7 @@ valid for the QL-810W (it raises if the size is wrong).
   built-in VLAN list was removed (VLANs are managed in the network, not
   here); the Network label's VLAN is now a free-text field. Settings shows
   this server's detected IP to help with firewall rules.
+- 2026-11-08 – New installs are locked to the Settings tab until "Test and
+  save" connects to the printer (`printer.verified`) and a time zone is
+  chosen; `/api/print` returns 409 until then. Later saves re-test only if
+  the printer's address changes.
