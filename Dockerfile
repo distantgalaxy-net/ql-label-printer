@@ -1,13 +1,14 @@
 # ------------------------------------------------------------------
 # labelprinter - label print service image
-# Date: 2026-11-07 18:30 GMT
+# Date: 2026-11-08 09:38 GMT (updated; first written 2026-11-07 18:30 GMT)
 # Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
 # Built by Container Manager from this folder (see docker-compose.yml).
 # ------------------------------------------------------------------
 FROM python:3.12-slim
 
 # Fonts used on the labels (DejaVu Sans, Condensed and Mono), plus
-# tzdata so TZ=Europe/London gives the right "today"
+# tzdata: the time zone database behind the Settings tab's time zone list
+# (it knows every country's daylight saving dates)
 RUN apt-get update \
  && apt-get install -y --no-install-recommends fonts-dejavu-core fonts-dejavu-extra tzdata \
  && rm -rf /var/lib/apt/lists/*

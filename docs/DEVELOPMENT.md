@@ -3,7 +3,7 @@
 Read this before changing the code. It explains what we're building, the decisions already made
 and the constraints that aren't obvious from the code.
 
-_Last updated: 2026-11-07 19:44 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Last updated: 2026-11-08 09:38 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 ---
 
@@ -24,7 +24,8 @@ The container is called **labelprinter**.
   instructions), `travel` (saved details + flights), `battery` (tiny),
   `network` (name/IP/VLAN/MAC).
 - Settings/presets persist in `/data/settings.json` (git-ignored), including
-  the printer's IP address and port, entered in the page's **Settings** tab.
+  the printer's model, IP address and port and the time zone, entered in the
+  page's **Settings** tab. `docker-compose.yml` only holds the web port.
 
 **Phase 2 – planned, not urgent (don't start without Ash asking):**
 - Address lookup from **Google Contacts** (People API, via Ash's existing
@@ -36,11 +37,18 @@ The container is called **labelprinter**.
 
 ## Hard constraints
 
-- **Roll:** 62mm **continuous** black/white (DK-22205). Ash uses only this roll.
+- **Roll:** 62mm **continuous** black/white (DK-22205) is the **only**
+  supported roll (Ash uses only this; layouts are drawn 696 dots wide).
+- **Models:** network-capable Brother QL models only (`printer.NETWORK_MODELS`),
+  chosen in Settings. Only the QL-810W is tested on hardware. Minimum label
+  length comes from the model (150 dots on most, ~300 on QL-1060N/QL-11xx).
 - **Orientation:** label width is always the roll width; length grows with
   content. **Never landscape.** Images are **696 dots wide** (300 dpi), `rotate="0"`.
-- **Minimum length:** the QL-810W rejects continuous labels shorter than
-  **150 dots (12.7mm)**. `labels.render()` pads short labels; keep that.
+- **Minimum length:** printers reject continuous labels shorter than their
+  minimum (QL-810W: **150 dots / 12.7mm**). `labels.render()` pads short
+  labels to `printer.min_length(model)`; keep that.
+- **Dates:** "today" uses the IANA time zone from Settings (`zoneinfo` +
+  the image's `tzdata`), so DST is automatic. No `TZ` env var.
 - **Black/white only** (`red=False`). Red would need DK-22251 rolls.
 - **Printer** is on the network, raw TCP port **9100**. Its IP address and
   port are set in the **Settings** tab (`settings.json` → `printer`), never in
@@ -133,3 +141,9 @@ valid for the QL-810W (it raises if the size is wrong).
   Settings tab so the code holds no home-network details (possible public
   release). Success message is "Label sent to printer" because the network
   backend can't confirm a label actually came out.
+- 2026-11-08 – Printer model and time zone moved to the Settings tab too
+  (model dropdown limited to network QL models; time zone list from the tz
+  database). `MODEL`, `LABEL` and `TZ` removed from docker-compose. The
+  built-in VLAN list was removed (VLANs are managed in the network, not
+  here); the Network label's VLAN is now a free-text field. Settings shows
+  this server's detected IP to help with firewall rules.

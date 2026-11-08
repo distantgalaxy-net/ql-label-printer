@@ -1,6 +1,6 @@
 # ------------------------------------------------------------------
 # labelprinter - label layouts
-# Date: 2026-11-07 18:10 GMT
+# Date: 2026-11-08 09:38 GMT (updated; first written 2026-11-07 18:10 GMT)
 # Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
 #
 # Turns form data into a black-and-white image the exact width of the
@@ -8,9 +8,14 @@
 # with its content, so nothing is ever printed landscape.
 #
 # Label types: address, freezer, travel, battery, network.
+#
+# "Today" (default dates on labels) uses the time zone chosen in the
+# Settings tab, so daylight saving is handled by the tz database.
 # ------------------------------------------------------------------
+import contextvars
 import os
 from datetime import date, datetime
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
@@ -218,10 +223,24 @@ def _square(img, size):
 
 
 # ---------------------------------------------------------------- helpers
+# Time zone for the label being rendered (set by render(); requests can run
+# in parallel threads, so a context variable keeps each one separate)
+_tz = contextvars.ContextVar("label_tz", default="UTC")
+
+
+def today():
+    """Today's date in the time zone from the Settings tab (UTC if unset/unknown)."""
+    try:
+        zone = ZoneInfo(_tz.get() or "UTC")
+    except (ZoneInfoNotFoundError, ValueError):
+        zone = ZoneInfo("UTC")
+    return datetime.now(zone).date()
+
+
 def uk_date(value=None, short=False):
     """Format a date as '7 Nov 2026' (or '7 Nov 26' when short)."""
     if not value:
-        d = date.today()
+        d = today()
     elif isinstance(value, str):
         d = datetime.strptime(value[:10], "%Y-%m-%d").date()
     else:
@@ -310,7 +329,7 @@ def freezer(data):
     data: title, frozen (YYYY-MM-DD), months, method, minutes, temp_c, fan_c, notes
     """
     title = (data.get("title") or "").strip()
-    frozen_d = datetime.strptime(data["frozen"], "%Y-%m-%d").date() if data.get("frozen") else date.today()
+    frozen_d = datetime.strptime(data["frozen"], "%Y-%m-%d").date() if data.get("frozen") else today()
     months = int(data["months"]) if str(data.get("months") or "").strip() else 0
 
     usable = WIDTH - 2 * SIDE
@@ -422,16 +441,27 @@ RENDERERS = {"address": address, "freezer": freezer, "travel": travel,
              "battery": battery, "network": network}
 
 
-# The QL-810W refuses continuous labels shorter than 150 dots (12.7mm),
-# so short labels (e.g. battery) are padded to that, content centred.
+# Printers refuse continuous labels shorter than their minimum: 150 dots
+# (12.7mm) on most models, ~300 dots (25mm) on some (see printer.py).
+# Short labels (e.g. battery) are padded to that, content centred.
 MIN_LENGTH = 150
 
 
-def render(kind, data):
-    """Render a label of the given kind. Raises KeyError for an unknown kind."""
-    img = RENDERERS[kind](data or {})
-    if img.height < MIN_LENGTH:
-        padded = Image.new("L", (img.width, MIN_LENGTH), 255)
-        padded.paste(img, (0, (MIN_LENGTH - img.height) // 2))
+def render(kind, data, tz="UTC", min_length=MIN_LENGTH):
+    """Render a label of the given kind. Raises KeyError for an unknown kind.
+
+    tz:         IANA time zone name (e.g. "Europe/London") used for "today".
+    min_length: shortest label the chosen printer model accepts, in dots;
+                shorter labels are padded top and bottom to this length.
+    """
+    token = _tz.set(tz or "UTC")
+    try:
+        img = RENDERERS[kind](data or {})
+    finally:
+        _tz.reset(token)
+    min_length = max(MIN_LENGTH, int(min_length or MIN_LENGTH))
+    if img.height < min_length:
+        padded = Image.new("L", (img.width, min_length), 255)
+        padded.paste(img, (0, (min_length - img.height) // 2))
         img = padded
     return img.convert("1", dither=Image.Dither.NONE).convert("L")

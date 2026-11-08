@@ -1,6 +1,6 @@
 # ------------------------------------------------------------------
-# labelprinter - Brother QL-810W label print service (Phase 1)
-# Date: 2026-11-07 19:44 GMT (updated; first written 18:30 GMT)
+# labelprinter - Brother QL label print service
+# Date: 2026-11-08 09:38 GMT (updated; first written 2026-11-07 18:30 GMT)
 # Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
 #
 # Builds the image from the Dockerfile in this folder. Web page at
@@ -8,8 +8,9 @@
 # proxy -> localhost:8013). Home Assistant (homeassistant, host network) can
 # call http://127.0.0.1:8013/api/print/<type>.
 #
-# The printer's IP address and port are set in the web page's Settings
-# tab (saved in ./data/settings.json), not here.
+# Everything else is set in the web page's Settings tab and saved in
+# ./data/settings.json: printer model, IP address and port, and time zone.
+# Only the 62mm continuous roll (DK-22205) is supported.
 # ------------------------------------------------------------------
 services:
   labelprinter:
@@ -18,10 +19,13 @@ services:
     container_name: labelprinter
     restart: unless-stopped
     ports:
-      - "127.0.0.1:8013:8013"             # NAS-only: reverse proxy + HA
+      # Web port: "<listen address>:<port on the NAS>:8013 inside the container".
+      # - Change the middle number if 8013 is already used on your NAS
+      #   (e.g. "127.0.0.1:8020:8013"), and point the reverse proxy at it.
+      # - 127.0.0.1 means only the NAS itself can connect (via a reverse
+      #   proxy or Home Assistant on the NAS). The page has NO login, so only
+      #   remove "127.0.0.1:" if your home network is trusted and the port
+      #   is never forwarded from the internet.
+      - "127.0.0.1:8013:8013"
     volumes:
       - ./data:/data                      # settings.json, presets, icons/
-    environment:
-      MODEL: "QL-810W"
-      LABEL: "62"                         # 62mm continuous black/white roll
-      TZ: "Europe/London"                 # so "today" is the UK date

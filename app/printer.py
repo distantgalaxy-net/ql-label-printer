@@ -1,15 +1,18 @@
 # ------------------------------------------------------------------
-# labelprinter - send a rendered label to the Brother QL-810W
-# Date: 2026-11-07 19:44 GMT (updated; first written 18:10 GMT)
+# labelprinter - send a rendered label to a Brother QL printer
+# Date: 2026-11-08 09:38 GMT (updated; first written 2026-11-07 18:10 GMT)
 # Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
 #
 # Uses brother_ql_next (a maintained fork of brother_ql) to turn an
 # image into the printer's raster commands and send them over the
 # network (raw TCP, normally port 9100).
 #
-# The printer's IP address and port are NOT set here: they are saved
-# from the web page's Settings tab (settings.json) and passed in by
-# main.py, so nothing about a particular home network is in the code.
+# The printer's model, IP address and port are NOT set here: they are
+# saved from the web page's Settings tab (settings.json "printer") and
+# passed in by main.py, so nothing about a particular home is in the code.
+#
+# Only the 62mm continuous roll (DK-22205) is supported: every label
+# layout is drawn 696 dots wide to fit it.
 # ------------------------------------------------------------------
 import ipaddress
 import os
@@ -19,15 +22,22 @@ import threading
 
 from brother_ql.backends.helpers import send
 from brother_ql.conversion import convert
+from brother_ql.models import ALL_MODELS
 from brother_ql.raster import BrotherQLRaster
 
-# Printer model and roll come from docker-compose environment variables
-# (they describe the hardware, not the network, so they have safe defaults)
-MODEL = os.environ.get("MODEL", "QL-810W")
-LABEL = os.environ.get("LABEL", "62")          # 62mm continuous roll
-
+LABEL = "62"               # 62mm continuous roll - the only one supported
 DEFAULT_PORT = 9100        # Brother's standard raw printing port
+DEFAULT_MODEL = "QL-810W"  # the model this was built and tested on
 CONNECT_TIMEOUT = 10       # seconds before we give up on the printer
+
+# Brother QL models that can print over a network (built-in Wi-Fi or
+# Ethernet). USB-only models can't be reached by this service.
+NETWORK_MODELS = ["QL-580N", "QL-710W", "QL-720NW", "QL-810W", "QL-820NWB",
+                  "QL-1060N", "QL-1100NWB", "QL-1110NWB", "QL-1115NWB"]
+
+# Shortest continuous label each model accepts, in dots (from brother_ql).
+# Most take 150 dots (12.7mm); some older/wide models need ~295-301 (25mm).
+_MIN_LENGTH = {m.identifier: m.min_max_length_dots[0] for m in ALL_MODELS}
 
 # A hostname such as "printer.lan": letters, digits and hyphens per part
 _HOSTNAME = re.compile(r"^(?=.{1,253}$)([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$")
@@ -36,9 +46,25 @@ _HOSTNAME = re.compile(r"^(?=.{1,253}$)([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9
 _lock = threading.Lock()
 
 
-def build(image, copies=1):
-    """Convert an image into QL raster instructions (bytes)."""
-    qlr = BrotherQLRaster(MODEL)
+def supported_models():
+    """List the selectable models with their minimum label length (for the page)."""
+    return [{"id": m, "min_length_mm": round(_MIN_LENGTH[m] / (300 / 25.4), 1)}
+            for m in NETWORK_MODELS]
+
+
+def check_model(model):
+    """Return the model if it's one we support, else the default (QL-810W)."""
+    return model if model in NETWORK_MODELS else DEFAULT_MODEL
+
+
+def min_length(model):
+    """Shortest label (in dots) the given model will accept."""
+    return _MIN_LENGTH.get(check_model(model), 150)
+
+
+def build(image, model=DEFAULT_MODEL, copies=1):
+    """Convert an image into QL raster instructions (bytes) for the given model."""
+    qlr = BrotherQLRaster(check_model(model))
     qlr.exception_on_warning = True
     return convert(
         qlr=qlr,
@@ -85,6 +111,12 @@ def _identifier(host, port):
     return f"tcp://{shown}:{port}"
 
 
+def _unreachable(host, port, exc):
+    """Friendly message for a failed connection, with the cause in brackets."""
+    return (f"Couldn't reach the printer at {host}:{port} ({exc}). "
+            f"Check it's switched on and the firewall allows port {port}.")
+
+
 def test_connection(host, port):
     """Open (and close) a TCP connection to the printer without printing.
 
@@ -101,17 +133,30 @@ def test_connection(host, port):
     return True, f"Connected to the printer at {host}:{port}"
 
 
-def _unreachable(host, port, exc):
-    """Friendly message for a failed connection, with the cause in brackets."""
-    return (f"Couldn't reach the printer at {host}:{port} ({exc}). "
-            f"Check it's switched on and the firewall allows port {port}.")
+def local_address(towards=None):
+    """Best guess at this server's own IP address, or None.
+
+    Asks the operating system which local address it would use to reach
+    `towards` (the printer, if set). A UDP "connect" sends nothing.
+    Also reports whether we're inside Docker, where this is the container's
+    internal address rather than the NAS's.
+    """
+    target = towards or "192.0.2.1"   # a documentation-only address, never used
+    try:
+        family = socket.AF_INET6 if ":" in target else socket.AF_INET
+        with socket.socket(family, socket.SOCK_DGRAM) as s:
+            s.connect((target, 9))
+            ip = s.getsockname()[0]
+    except OSError:
+        ip = None
+    return {"ip": ip, "in_docker": os.path.exists("/.dockerenv")}
 
 
-def print_image(image, host, port=DEFAULT_PORT, copies=1):
+def print_image(image, host, port=DEFAULT_PORT, model=DEFAULT_MODEL, copies=1):
     """Send an image to the printer at host:port. Returns (ok, message).
 
-    host/port come from the saved settings. If no printer has been set up yet
-    the caller gets a message pointing at the Settings tab instead.
+    host/port/model come from the saved settings. If no printer has been set
+    up yet the caller gets a message pointing at the Settings tab instead.
     """
     if not (host or "").strip():
         return False, "No printer set up yet. Add its IP address in the Settings tab."
@@ -119,7 +164,7 @@ def print_image(image, host, port=DEFAULT_PORT, copies=1):
     if err:
         return False, f"Printer settings problem: {err}"
     try:
-        instructions = build(image, copies)
+        instructions = build(image, model, copies)
     except Exception as exc:  # bad image size etc.
         return False, f"Couldn't prepare the label: {exc}"
     with _lock:

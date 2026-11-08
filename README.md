@@ -1,7 +1,7 @@
 # LabelPrinter
 Prints helpful labels on Brother QL-810W
 
-_Updated: 2026-11-07 19:44 GMT · Developer: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Updated: 2026-11-08 09:38 GMT · Developer: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 A small self-hosted label service (container **labelprinter** on the Synology NAS
 **the NAS**) that prints on a Brother QL-810W from a phone-friendly web page or
@@ -43,6 +43,23 @@ allows, ~13mm) · Network device (name, IP, VLAN, MAC).
 Web page: **http://labels.home.example** (Trusted + VPN only). The old
 `/labeldesigner` link still works.
 
+## Supported printers and labels
+
+- **Roll:** the **62mm continuous** roll (DK-22205) only, black on white.
+  Every label layout is drawn for that width.
+- **Printers:** Brother QL models that print over the network. Choose yours
+  in the **Settings** tab:
+
+  | Model | Shortest label |
+  |---|---|
+  | QL-580N, QL-710W, QL-720NW, QL-810W, QL-820NWB | 12.7mm |
+  | QL-1060N | 25mm |
+  | QL-1100NWB, QL-1110NWB, QL-1115NWB | 25.5mm |
+
+  Only the **QL-810W** has been tested on real hardware; the others use the
+  same commands via `brother_ql_next`. USB-only models (QL-700, QL-800 …)
+  can't be reached from a container.
+
 ---
 
 ## Install on the NAS
@@ -73,8 +90,16 @@ packages once).
    `pklaus/brother_ql_web`.
 
 Nothing changes in the reverse proxy, the access profile or the UniFi rule:
-the port is still `127.0.0.1:8013`. The printer's IP address is no longer in
-`docker-compose.yml`: enter it once in the page's **Settings** tab (see below).
+the port is still `127.0.0.1:8013`. The printer and time zone are no longer in
+`docker-compose.yml`: set them once in the page's **Settings** tab (see below).
+
+**Web port.** The only setting left in `docker-compose.yml` is the port line
+`"127.0.0.1:8013:8013"` (listen address : port on the NAS : port in the
+container). If 8013 is already used on your NAS, change the middle number
+(e.g. `127.0.0.1:8020:8013`) and point the reverse proxy at the new port.
+`127.0.0.1` keeps it reachable only from the NAS itself. **The page has no
+login**, so don't open it wider unless your home network is trusted, and
+never forward it from the internet.
 
 ## Updating to a new version
 
@@ -85,10 +110,16 @@ the port is still `127.0.0.1:8013`. The printer's IP address is no longer in
 
 ## First-time setup in the page
 
-- **Settings tab (do this first):** enter the printer's IP address and port
-  (Brother printers use **9100**), tap **Test connection**, then **Save**.
-  The page opens on this tab until a printer is saved. Give the printer a
-  fixed IP (a DHCP reservation in your router) so it doesn't change.
+- **Settings tab (do this first):** pick your **printer model**, enter its
+  **IP address** and **port** (Brother printers use **9100**), tap
+  **Test connection**, check the **time zone** (it suggests your phone's),
+  then **Save**. The page opens on this tab until both are saved.
+  - Give the printer a fixed IP (a DHCP reservation in your router).
+  - The time zone sets "today" on freezer and battery labels. Daylight
+    saving (e.g. GMT ↔ BST) is handled automatically.
+  - The box under the port shows this server's IP address, to help with
+    firewall rules. In Docker that's the container's internal address; the
+    printer sees connections from the NAS's own IP.
 - **Travel tab:** type your name, address and phone once and tap
   **Save as my details**.
 - **Freezer tab:** fill in a food you freeze often and tap **Save as preset**.
@@ -146,7 +177,8 @@ data:
 |---|---|
 | `POST /api/preview/<type>` | PNG preview (header `X-Label-Length-mm`) |
 | `POST /api/print/<type>` | Print → `{"ok": true/false, "message": "…"}` (add `"copies": n`) |
-| `GET/PUT /api/settings` | Saved details, freezer presets, battery types, VLAN list, `printer` (`host`, `port`) |
+| `GET/PUT /api/settings` | Saved details, freezer presets, battery types, `printer` (`host`, `port`, `model`), `timezone` (e.g. `Europe/London`) |
+| `GET /api/options` | Printer models, time zone names, this server's detected IP |
 | `POST /api/printer/test` | Check the printer can be reached without printing (body `host`/`port`, or empty to test the saved one) |
 | `GET /api/icons` | Icon names |
 

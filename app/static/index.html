@@ -1,11 +1,12 @@
 <!doctype html>
 <!--
   labelprinter - label printing page (phone-first)
-  Date: 2026-11-07 19:44 GMT (updated; first written 18:15 GMT)
+  Date: 2026-11-08 09:38 GMT (updated; first written 2026-11-07 18:15 GMT)
   Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
   One form per label type; the preview updates as you type, then Print.
-  The Settings tab holds the printer's IP address and port (saved on the
-  server), so no network details are built into the page or the image.
+  The Settings tab holds the printer (model, IP address, port) and the time
+  zone (saved on the server), so no home details are built into the page
+  or the image.
 -->
 <html lang="en-GB">
 <head>
@@ -50,6 +51,8 @@
   .btn2.primary { background: var(--accent); color: var(--accent-fg); }
   .btn2:disabled { opacity: .55; }
   .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+  .info { font-size: .85rem; color: var(--muted); margin: 0; padding: 10px; border-radius: 8px; background: var(--field); border: 1px dashed var(--line); }
+  h2 { font-size: 1rem; margin: 6px 0 0; }
   .linkbtn { font: inherit; font-size: .9rem; background: none; border: 0; color: var(--accent); padding: 0; cursor: pointer; justify-self: start; }
   .preview { margin-bottom: 12px; }
   .preview .small { margin-top: 4px; }
@@ -132,7 +135,7 @@
         <label>Changed on<input id="b-changed" name="changed" type="date"></label>
       </div>
       <datalist id="b-types"></datalist>
-      <p class="small">Prints the smallest label the printer allows, about 13mm long.</p>
+      <p class="small">Prints the smallest label your printer allows (about 13mm on most models).</p>
     </form>
 
     <!-- Network -->
@@ -140,7 +143,7 @@
       <label>Device name<input id="n-name" name="name" autocomplete="off" placeholder="Label printer"></label>
       <div class="row">
         <label>IP address<input id="n-ip" name="ip" inputmode="decimal" placeholder="e.g. 192.168.1.20"></label>
-        <label>VLAN<select id="n-vlan" name="vlan"><option value="">–</option></select></label>
+        <label>VLAN (optional)<input id="n-vlan" name="vlan" autocomplete="off" placeholder="e.g. 20"></label>
       </div>
       <label>MAC (optional)<input id="n-mac" name="mac" autocomplete="off"></label>
       <label>Notes (optional)<textarea id="n-notes" name="notes" style="min-height:60px"></textarea></label>
@@ -148,12 +151,20 @@
 
     <!-- Settings: not a label, so the preview and Print bar are hidden on this tab -->
     <form data-kind="settings" hidden>
-      <p class="small">Where to send labels. The printer needs a fixed IP address (set a DHCP reservation in your router) and must accept raw printing on the port below.</p>
+      <h2>Printer</h2>
+      <p class="small">Where to send labels. The printer needs a fixed IP address (set a DHCP reservation in your router) and must accept raw printing on the port below. Only the 62mm continuous roll (DK-22205) is supported.</p>
+      <label>Printer model<select id="s-model"></select></label>
       <div class="row">
         <label>Printer IP address<input id="s-host" autocomplete="off" inputmode="decimal" placeholder="e.g. 192.168.1.20" spellcheck="false"></label>
         <label>Port<input id="s-port" type="number" min="1" max="65535" inputmode="numeric" placeholder="9100"></label>
       </div>
       <p class="small">Brother printers use port 9100. If printing is refused, turn Editor Lite off on the printer.</p>
+      <p class="info" id="s-server">This server: checking…</p>
+
+      <h2>Time zone</h2>
+      <label>Time zone<select id="s-tz"><option value="">Choose…</option></select></label>
+      <button type="button" class="linkbtn" id="s-tz-device">Use this phone's time zone</button>
+      <p class="small" id="s-tz-now">Used for today's date on labels. Daylight saving (e.g. GMT → BST) changes automatically.</p>
       <div class="actions">
         <button type="button" class="btn2 primary" id="s-save">Save</button>
         <button type="button" class="btn2" id="s-test">Test connection</button>
@@ -178,8 +189,14 @@ let kind = "address";
 let previewTimer = null;
 let previewUrl = null;
 const $ = (id) => document.getElementById(id);
-// Today's date in the phone's own time zone, as YYYY-MM-DD
-const today = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
+// The phone's own time zone (e.g. "Europe/London"), or "" if unknown
+const deviceZone = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch (e) { return ""; } };
+// Today's date as YYYY-MM-DD in the saved time zone (the phone's if none
+// saved). en-CA formats dates as YYYY-MM-DD; DST is handled by the browser.
+function today() {
+  try { return new Intl.DateTimeFormat("en-CA", { timeZone: settings.timezone || undefined }).format(new Date()); }
+  catch (e) { return new Intl.DateTimeFormat("en-CA").format(new Date()); }
+}
 
 // Collect the active form's fields into a plain object
 function formData(k) {
@@ -293,14 +310,40 @@ $("t-save").addEventListener("click", async () => {
   setStatus(await saveSettings({ me }) ? "Saved your details" : "Couldn't save", "ok");
 });
 
-// ---- Settings tab: printer IP address and port --------------------
-// Read the two fields as the object the API expects
+// ---- Settings tab: printer and time zone ---------------------------
+// Read the printer fields as the object the API expects
 function printerFields() {
-  return { host: $("s-host").value.trim(), port: $("s-port").value.trim() || 9100 };
+  return { host: $("s-host").value.trim(), port: $("s-port").value.trim() || 9100, model: $("s-model").value };
+}
+// Show the current time and UTC offset in the chosen zone, so it's easy
+// to check (e.g. "Now 09:40 GMT"; in summer it would say BST)
+function showZoneTime() {
+  const tz = $("s-tz").value;
+  if (!tz) { $("s-tz-now").textContent = "Used for today's date on labels. Daylight saving (e.g. GMT → BST) changes automatically."; return; }
+  try {
+    const now = new Intl.DateTimeFormat("en-GB", { timeZone: tz, weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZoneName: "short" }).format(new Date());
+    $("s-tz-now").textContent = `Now there: ${now}. Daylight saving changes automatically.`;
+  } catch (e) { $("s-tz-now").textContent = ""; }
+}
+$("s-tz").addEventListener("change", showZoneTime);
+$("s-tz-device").addEventListener("click", () => {
+  const z = deviceZone();
+  if (z && [...$("s-tz").options].some(o => o.value === z)) { $("s-tz").value = z; showZoneTime(); }
+  else setStatus("Couldn't tell this phone's time zone; pick it from the list", "bad");
+});
+// Describe this server's address (detected), so firewall rules are easier
+function showServer(server) {
+  if (!server) { $("s-server").textContent = "This server: couldn't check."; return; }
+  const ip = server.ip || "not detected";
+  $("s-server").textContent = server.in_docker
+    ? `This server: ${ip}, port ${server.port} (inside Docker). The printer sees connections from your NAS's own IP address, so allow that in any firewall rule.`
+    : `This server: ${ip}, port ${server.port}. Allow this address to reach the printer in any firewall rule.`;
 }
 $("s-save").addEventListener("click", async () => {
-  const ok = await saveSettings({ printer: printerFields() });
-  setStatus(ok ? "Printer settings saved" : lastSaveError, ok ? "ok" : "bad");
+  if (!$("s-tz").value) { setStatus("Choose a time zone", "bad"); return; }
+  const ok = await saveSettings({ printer: printerFields(), timezone: $("s-tz").value });
+  setStatus(ok ? "Settings saved" : lastSaveError, ok ? "ok" : "bad");
+  if (ok) { $("f-frozen").value = today(); $("b-changed").value = today(); }
 });
 // Test the address in the boxes (saved or not) without printing anything
 $("s-test").addEventListener("click", async () => {
@@ -318,23 +361,34 @@ $("s-test").addEventListener("click", async () => {
 // (or the Settings tab if no printer has been set up yet)
 async function init() {
   try { settings = await (await fetch("/api/settings")).json(); } catch (e) { settings = {}; }
+  let opts = {};
+  try { opts = await (await fetch("/api/options")).json(); } catch (e) {}
+  (opts.models || []).forEach(m => $("s-model").add(new Option(`${m.id}${m.min_length_mm > 13 ? ` (labels at least ${Math.round(m.min_length_mm)}mm)` : ""}`, m.id)));
+  (opts.timezones || []).forEach(z => $("s-tz").add(new Option(z.replace(/_/g, " "), z)));
+  showServer(opts.server);
   try {
     const icons = await (await fetch("/api/icons")).json();
     icons.forEach(n => $("a-icon").add(new Option(n.charAt(0).toUpperCase() + n.slice(1), n)));
   } catch (e) {}
   fillPresets();
   (settings.battery_types || []).forEach(t => $("b-types").append(new Option(t)));
-  (settings.vlans || []).forEach(v => $("n-vlan").add(new Option(v, v)));
   const me = settings.me || {};
   $("t-name").value = me.name || ""; $("t-address").value = me.address || ""; $("t-phone").value = me.phone || "";
   const pr = settings.printer || {};
   $("s-host").value = pr.host || ""; $("s-port").value = pr.port || 9100;
+  if (pr.model) $("s-model").value = pr.model;
+  // Saved time zone, or suggest the phone's own until one is saved
+  $("s-tz").value = settings.timezone || deviceZone();
+  if (!$("s-tz").value) $("s-tz").value = "";
+  showZoneTime();
   $("f-frozen").value = today(); $("b-changed").value = today();
   let start = "address";
   try { start = localStorage.getItem("labelprinter-tab") || start; } catch (e) {}
-  if (!pr.host) start = "settings";
+  // Until the printer and time zone are saved, open on the Settings tab
+  const needsSetup = !pr.host || !settings.timezone;
+  if (needsSetup) start = "settings";
   showTab(start);
-  if (!pr.host) setStatus("Set up your printer first: enter its IP address and tap Save.", "bad");
+  if (needsSetup) setStatus("Finish setting up: check the printer and time zone, then tap Save.", "bad");
 }
 init();
 </script>
