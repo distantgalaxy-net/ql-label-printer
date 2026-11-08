@@ -1,6 +1,6 @@
 # ------------------------------------------------------------------
 # labelprinter - label print service image
-# Date: 2026-11-08 09:38 GMT (updated; first written 2026-11-07 18:30 GMT)
+# Date: 2026-11-08 16:01 GMT (updated; first written 2026-11-07 18:30 GMT)
 # Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
 # Built by Container Manager from this folder (see docker-compose.yml).
 # ------------------------------------------------------------------
@@ -19,7 +19,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app/ /app/
 
-# Settings, presets and custom icons live in /data (mounted from the NAS)
+# Settings, presets, custom icons and the optional password hash live in
+# /data (mounted from the host so they survive updates)
 ENV DATA_DIR=/data ICON_DIR=/data/icons PORT=8013 PYTHONUNBUFFERED=1
 EXPOSE 8013
 

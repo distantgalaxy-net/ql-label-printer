@@ -1,6 +1,6 @@
 # ------------------------------------------------------------------
 # labelprinter - label print service (web page + API)
-# Date: 2026-11-08 09:46 GMT (updated; first written 2026-11-07 18:10 GMT)
+# Date: 2026-11-08 16:01 GMT (updated; first written 2026-11-07 18:10 GMT)
 # Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
 #
 # Serves the phone-friendly web page and a small JSON API:
@@ -12,11 +12,14 @@
 #   POST /api/print/<kind>      print it  -> {"ok": bool, "message": str}
 #   POST /api/printer/test      check the printer can be reached (no print)
 #   GET  /api/options           printer models, time zones, this server's IP
+#   GET  /login, POST /api/login, POST /api/logout   optional password
+#   PUT  /api/password          set, change or remove the password
 # <kind> is address | freezer | travel | battery | network.
 # Home Assistant can call /api/print/<kind> with the same JSON.
 #
-# No login: keep it on the home network (NAS-only port + trusted-only
-# reverse proxy).
+# Optional password (off by default, see auth.py). Without one, keep the
+# page on a trusted network only (e.g. NAS-only port + reverse proxy that
+# allows only your trusted subnets).
 #
 # The printer (model, IP address, port) and the time zone are saved from
 # the Settings tab (settings.json), not hard-coded, so each install sets
@@ -30,11 +33,13 @@ import os
 import threading
 from zoneinfo import available_timezones
 
-from flask import Flask, jsonify, request, send_file, send_from_directory
+from flask import (Flask, jsonify, redirect, request, send_file,
+                   send_from_directory, session)
 from waitress import serve
 
 import labels
 import printer
+from auth import Auth, session_lifetime
 
 DATA_DIR = os.environ.get("DATA_DIR", "/data")
 SETTINGS_FILE = os.path.join(DATA_DIR, "settings.json")
@@ -60,6 +65,96 @@ TIMEZONES = sorted(available_timezones())
 
 app = Flask(__name__, static_folder=None)
 _settings_lock = threading.Lock()
+
+# ---------------------------------------------------------------- password
+auth = Auth(DATA_DIR)
+os.makedirs(DATA_DIR, exist_ok=True)
+app.secret_key = auth.secret_key()          # signs the login cookie
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,          # scripts in the page can't read it
+    SESSION_COOKIE_SAMESITE="Lax",         # not sent on cross-site posts
+    PERMANENT_SESSION_LIFETIME=session_lifetime(),
+)
+
+# Paths that work without logging in: the login page itself, the login
+# call, and the Docker health check.
+OPEN_PATHS = {"/login", "/api/login", "/health"}
+
+
+def logged_in():
+    """True if no password is set, or this request is logged in.
+
+    A browser is logged in when its session holds the current password
+    version; scripts (e.g. Home Assistant) can use HTTP Basic auth instead.
+    """
+    if not auth.enabled():
+        return True
+    if session.get("auth") == auth.version():
+        return True
+    basic = request.authorization
+    return bool(basic and basic.password and auth.check(basic.password))
+
+
+@app.before_request
+def require_login():
+    """Block everything except OPEN_PATHS until logged in (if a password is set)."""
+    if request.path in OPEN_PATHS or logged_in():
+        return None
+    if request.path.startswith("/api/"):
+        return jsonify({"ok": False, "message": "Password required", "login": True}), 401
+    return redirect("/login")
+
+
+@app.get("/login")
+def login_page():
+    """The password page (goes straight to the app if no password is set)."""
+    if not auth.enabled():
+        return redirect("/")
+    return send_from_directory(STATIC, "login.html")
+
+
+@app.post("/api/login")
+def login():
+    """Check the password and start a 30-day session."""
+    body = request.get_json(silent=True) or {}
+    if not auth.enabled():
+        return jsonify({"ok": True})
+    if not auth.check(body.get("password")):
+        return jsonify({"ok": False, "message": "Wrong password"}), 401
+    session.permanent = True
+    session["auth"] = auth.version()
+    return jsonify({"ok": True})
+
+
+@app.post("/api/logout")
+def logout():
+    """Forget this browser's login."""
+    session.clear()
+    return jsonify({"ok": True})
+
+
+@app.put("/api/password")
+def change_password():
+    """Set, change or remove the password.
+
+    Body: {"current": "...", "new": "..."}. When a password is already set,
+    "current" must match (so an unlocked phone can't quietly change it).
+    An empty "new" removes the password. This browser stays logged in.
+    """
+    body = request.get_json(silent=True) or {}
+    if auth.enabled() and not auth.check(body.get("current")):
+        return jsonify({"ok": False, "message": "Current password is wrong"}), 403
+    new = body.get("new") or ""
+    if not new:
+        auth.remove()
+        session.clear()
+        return jsonify({"ok": True, "message": "Password removed", "password_set": False})
+    err = auth.set_password(new)
+    if err:
+        return jsonify({"ok": False, "message": err}), 400
+    session.permanent = True
+    session["auth"] = auth.version()       # keep this browser logged in
+    return jsonify({"ok": True, "message": "Password saved", "password_set": True})
 
 
 def load_settings():
@@ -113,8 +208,8 @@ def old_link():
 
 @app.get("/api/settings")
 def get_settings():
-    """Return all saved settings (details, presets, lists, printer address)."""
-    return jsonify(load_settings())
+    """Return all saved settings, plus whether a password is set (never the hash)."""
+    return jsonify({**load_settings(), "password_set": auth.enabled()})
 
 
 @app.put("/api/settings")
@@ -249,4 +344,7 @@ if __name__ == "__main__":
     os.makedirs(os.path.join(DATA_DIR, "icons"), exist_ok=True)
     if not os.path.exists(SETTINGS_FILE):
         save_settings(DEFAULT_SETTINGS)
+    if auth.reset_from_env():
+        print("RESET_PASSWORD is set: the password has been removed. "
+              "Take RESET_PASSWORD out of docker-compose.yml now.", flush=True)
     serve(app, host="0.0.0.0", port=int(os.environ.get("PORT", "8013")))
