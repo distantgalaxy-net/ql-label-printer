@@ -3,7 +3,7 @@
 Read this before changing the code. It explains what we're building, the decisions already made
 and the constraints that aren't obvious from the code.
 
-_Last updated: 2026-11-08 23:30 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Last updated: 2026-11-09 00:50 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 ---
 
@@ -44,6 +44,14 @@ AB1 2CD", `192.168.1.20`, `labels.home.example`).
   in the browser's localStorage so the page and login page colour
   themselves before settings load. Success/error colours stay green/red
   whatever the accent.
+- **Contacts** (Address tab): the browser's Contact Picker API
+  (`navigator.contacts.select(["name","address"])`), all in the page – no
+  server code, nothing stored. Shown only when the API exists, the page is
+  a secure context (HTTPS or localhost) and `address` is supported;
+  otherwise a hint chosen by device type (Android over HTTP → needs HTTPS;
+  iPhone → Safari feature flag; computer → use a phone). Several
+  addresses → the user picks one (no default). Tested with a stand-in
+  picker only; Android Chrome is the target, iPhone untested.
 - **Print** sits directly under the label preview (no fixed bottom bar),
   so what you see and the button are together.
 - **Messages** appear next to the button that caused them (`say()` in
@@ -55,7 +63,8 @@ AB1 2CD", `192.168.1.20`, `labels.home.example`).
   signed session cookie (30 days) for browsers, HTTP Basic auth for scripts.
 
 **Ideas, not started yet:**
-- Address lookup from Google Contacts (People API).
+- Address lookup from Google Contacts (People API) for computers, where
+  the browser contact picker isn't available.
 - Guest Wi-Fi: per-guest UniFi hotspot vouchers printed as QR/code labels.
 - Pick network devices and battery devices from Home Assistant (battery
   labels must still work for devices not in HA).
@@ -201,6 +210,12 @@ image is valid for a model (it raises if the size is wrong).
   read into the flight boxes for checking, then added.
 - 2026-11-08 – Accent colour choice in Settings (green default; blue, red,
   pink, purple, orange, monochrome), each tuned for light and dark themes.
+- 2026-11-09 – Contacts on phones via the browser's Contact Picker API
+  rather than Google's People API: no Google sign-in or API keys, works
+  with whatever account the phone uses, and the page only ever sees the
+  one contact picked. Detection is by feature (does the picker exist?),
+  not by device name; the device type only chooses the hint. Requires
+  HTTPS.
 - 2026-11-08 – Distributed as a Docker Hub image built by GitHub Actions,
   so installs and updates are a download instead of copying code. `data/`
   is excluded from the build context (`.dockerignore`).

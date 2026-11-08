@@ -1,7 +1,7 @@
 <!doctype html>
 <!--
   labelprinter - label printing page (phone-first)
-  Date: 2026-11-08 23:20 GMT (updated; first written 2026-11-07 18:15 GMT)
+  Date: 2026-11-09 00:40 GMT (updated; first written 2026-11-07 18:15 GMT)
   Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
   One form per label type; the preview updates as you type, then Print.
   The Settings tab holds the printer (model, IP address, port), the time
@@ -15,6 +15,10 @@
   the login has expired, any API call answers 401 and we go to /login.
   Everything saved (presets, details, trips, icons) lives on the server in
   /data - never in this repo or the Docker image.
+  Address tab: "Choose from contacts" uses the browser's Contact Picker
+  (Chrome on Android; Safari on iPhone only with a feature flag; not on
+  computers). It needs an https:// page. The picked contact is only used
+  to fill in the form - it isn't saved anywhere.
 -->
 <html lang="en-GB">
 <head>
@@ -104,6 +108,7 @@
   .list li { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--field); }
   .list li .grow { flex: 1; min-width: 0; overflow-wrap: anywhere; }
   .list li.break { border: 0; background: none; padding: 0 8px; color: var(--muted); font-size: .8rem; }
+  .addrtext { white-space: pre-line; text-align: left; }
   .legtext { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: .85rem; }
   .summary { margin: 0; white-space: pre-line; color: var(--fg); }
   .printrow { display: flex; gap: 10px; align-items: center; }
@@ -142,6 +147,18 @@
   <div class="card">
     <!-- Address -->
     <form data-kind="address" hidden>
+      <!-- Contacts: the button only shows where the browser can pick contacts -->
+      <div class="actions" id="c-row" hidden>
+        <button type="button" class="btn2 primary" id="c-pick">Choose from contacts</button>
+      </div>
+      <p class="small" id="c-note" hidden></p>
+      <!-- Shown when the chosen contact has more than one address -->
+      <div class="group" id="c-choose" hidden>
+        <h3 id="c-choose-title">Which address?</h3>
+        <ul class="list" id="c-addresses"></ul>
+        <div class="actions"><button type="button" class="btn2" id="c-cancel">Cancel</button></div>
+      </div>
+      <p class="msg" id="msg-contacts" role="status"></p>
       <label>Name<input id="a-name" name="name" autocomplete="off" placeholder="Alex Example"></label>
       <label>Address (one line per row)<textarea id="a-address" name="address" placeholder="1 High Street&#10;Anytown&#10;AB1 2CD"></textarea></label>
       <div class="iconpick">
@@ -520,6 +537,116 @@ async function saveSettings(patch) {
   else Object.assign(settings, patch);
   return "";
 }
+
+// ---- Address tab: choose from contacts ----------------------------------
+// Uses the Contact Picker API (navigator.contacts.select). The browser shows
+// its own contact list; the page only receives the one contact chosen.
+// We check whether the picker is really there instead of trusting the
+// device type; the device type only picks the right hint when it isn't.
+
+// "android", "ios" or "computer", from what the browser reports. iPads
+// claim to be Macs, so a "Mac" with a touch screen counts as iOS.
+function deviceKind() {
+  const ua = navigator.userAgent || "";
+  if (/Android/i.test(ua)) return "android";
+  if (/iPhone|iPad|iPod/i.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) return "ios";
+  return "computer";
+}
+// True when this browser can open a contact picker that returns addresses
+async function canPickAddresses() {
+  if (!("contacts" in navigator) || !("ContactsManager" in window) || !window.isSecureContext) return false;
+  try { return (await navigator.contacts.getProperties()).includes("address"); }
+  catch (e) { return false; }
+}
+// Show the button where it works, or a short hint explaining why not
+async function setUpContacts() {
+  const ok = await canPickAddresses(), device = deviceKind(), note = $("c-note");
+  $("c-row").hidden = !ok;
+  note.hidden = ok;
+  if (ok) return;
+  if (device === "android" && !window.isSecureContext) {
+    note.textContent = "To choose an address from your contacts, open this page with an https:// address (for example through your NAS's reverse proxy with a certificate). Phones only allow it on secure pages.";
+  } else if (device === "android") {
+    note.textContent = "Choosing from contacts needs Chrome on Android.";
+  } else if (device === "ios") {
+    note.textContent = "Safari on iPhone can only choose contacts if its Contact Picker feature flag is switched on (Settings → Apps → Safari → Advanced → Feature Flags). Otherwise, type the address in.";
+  } else {
+    note.textContent = "On an Android phone you can choose an address straight from your contacts.";
+  }
+}
+// Turn one contact address into label lines: street lines first, then
+// locality, town, county/region, postcode and country, skipping blanks and
+// repeats. Some phones put the whole address in the street field (we can
+// tell because the postcode is already in it): then it's split at commas
+// and new lines, and the separate town/postcode fields are only added if
+// they aren't in it already. Otherwise street lines are kept as they are
+// ("Flat 4, 22 Mill Lane" stays one line).
+function contactAddressLines(a) {
+  const street = (a.addressLine || []).map(l => String(l || "").trim()).filter(Boolean);
+  const streetText = street.join("\n").toLowerCase();
+  const postcode = String(a.postalCode || "").trim().toLowerCase();
+  const whole = Boolean(postcode) && streetText.includes(postcode);
+  const lines = [];
+  const add = (v) => {
+    v = String(v || "").trim();
+    if (v && !lines.some(l => l.toLowerCase() === v.toLowerCase())) lines.push(v);
+  };
+  street.forEach(l => l.split(whole ? /\r?\n|,\s*/ : /\r?\n/).forEach(add));
+  [a.dependentLocality, a.city, a.region, a.postalCode, a.country].forEach(v => {
+    if (whole && streetText.includes(String(v || "").trim().toLowerCase())) return;   // already there
+    add(v);
+  });
+  return lines;
+}
+// Fill the form with a name and one address, then refresh the preview
+function useContact(name, lines) {
+  if (name) $("a-name").value = name;
+  $("a-address").value = lines.join("\n");
+  $("c-choose").hidden = true;
+  schedulePreview(0);
+}
+$("c-pick").addEventListener("click", async () => {
+  say("msg-contacts", ""); $("c-choose").hidden = true;
+  let picked;
+  try { picked = await navigator.contacts.select(["name", "address"], { multiple: false }); }
+  catch (e) { say("msg-contacts", "Couldn't open your contacts. Check Chrome is allowed to read them.", "bad"); return; }
+  if (!picked || !picked.length) return;                 // closed without choosing
+  const c = picked[0];
+  const name = (c.name || []).find(n => n && n.trim()) || "";
+  // Drop empty or duplicate addresses
+  const seen = new Set(), options = [];
+  (c.address || []).forEach(a => {
+    const lines = contactAddressLines(a), key = lines.join("|").toLowerCase();
+    if (lines.length && !seen.has(key)) { seen.add(key); options.push(lines); }
+  });
+  if (!options.length) {
+    if (name) $("a-name").value = name;
+    schedulePreview(0);
+    say("msg-contacts", `${name || "That contact"} has no address saved. Type it in below.`, "bad");
+    return;
+  }
+  if (options.length === 1) {
+    useContact(name, options[0]);
+    say("msg-contacts", `Filled in ${name || "the contact"}'s address – check it below`, "ok");
+    return;
+  }
+  // More than one address: list them all and let the user choose (no default)
+  const list = $("c-addresses"); list.textContent = "";
+  $("c-choose-title").textContent = `${name || "This contact"} has ${options.length} addresses. Which one?`;
+  options.forEach(lines => {
+    const li = document.createElement("li");
+    const text = document.createElement("span"); text.className = "grow addrtext"; text.textContent = lines.join("\n");
+    const use = document.createElement("button"); use.type = "button"; use.className = "btn2 primary mini"; use.textContent = "Use this";
+    use.addEventListener("click", () => {
+      useContact(name, lines);
+      say("msg-contacts", "Filled in the address you chose – check it below", "ok");
+    });
+    li.append(text, use); list.append(li);
+  });
+  $("c-choose").hidden = false;
+  $("c-choose").scrollIntoView({ block: "nearest", behavior: "smooth" });
+});
+$("c-cancel").addEventListener("click", () => { $("c-choose").hidden = true; });
 
 // ---- Address tab: icons -----------------------------------------------
 const titleCase = (n) => n.charAt(0).toUpperCase() + n.slice(1);
@@ -974,6 +1101,7 @@ async function init() {
   (opts.timezones || []).forEach(z => $("s-tz").add(new Option(z.replace(/_/g, " "), z)));
   try { icons = await (await fetch("/api/icons")).json(); } catch (e) { icons = []; }
   fillIcons("none");
+  setUpContacts();
   fillPresets();
   fillTrips();
   (settings.battery_types || []).forEach(t => $("b-types").append(new Option(t)));
