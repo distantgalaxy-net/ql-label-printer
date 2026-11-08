@@ -3,7 +3,7 @@
 Print useful labels on a Brother QL label printer from your phone or from
 Home Assistant.
 
-_Updated: 2026-11-08 23:30 GMT · Developer: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Updated: 2026-11-09 00:10 GMT · Developer: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 A small self-hosted web service, run in Docker (for example on a Synology
 NAS). It prints on a network-connected Brother QL printer from a
@@ -181,10 +181,16 @@ To turn it on, open **Settings → Password (optional)**, enter a new password
 Releases are listed on the GitHub **Releases** page. Your settings in
 `data/` are kept across updates.
 
-- **Synology:** Container Manager → **Project** → `ql-label-printer` →
-  **Action → Stop**, then **Action → Build**. That downloads the newest
-  image and starts it again. (Alternatively: **Image** →
-  `distantgalaxy/ql-label-printer` → **Update**, then restart the project.)
+- **Synology:** Container Manager doesn't download updates by itself, and
+  the "Update available" badge can take a long time to appear, so update
+  by hand once the release's GitHub build has finished:
+  1. **Registry** → search `distantgalaxy/ql-label-printer` → select it →
+     **Download** → tag `latest`. This fetches the new image (Build on its
+     own does not, if an older copy is already on the NAS).
+  2. **Project** → `ql-label-printer` → **Action → Stop**, then
+     **Action → Build**. This recreates the container from the new image;
+     a plain restart keeps using the old one.
+  3. Open the page to check it's the new version.
 - **Other hosts:**
   ```bash
   docker compose pull && docker compose up -d
