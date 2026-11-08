@@ -3,14 +3,14 @@
 Print useful labels on a Brother QL label printer from your phone or from
 Home Assistant.
 
-_Updated: 2026-11-08 16:01 GMT · Developer: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Updated: 2026-11-08 17:38 GMT · Developer: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 A small self-hosted web service, run in Docker (for example on a Synology
 NAS). It prints on a network-connected Brother QL printer from a
 phone-friendly web page or a simple JSON API. Labels are always the full
 width of the 62mm continuous roll; their length grows with the content.
 
-> Working on the code? Read [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) first – it has the goals,
+> Working on the code? Read the [development guide](docs/DEVELOPMENT.md) first – it has the goals,
 > constraints and conventions.
 
 ## How it fits together

@@ -3,7 +3,7 @@
 Read this before changing the code. It explains what we're building, the decisions already made
 and the constraints that aren't obvious from the code.
 
-_Last updated: 2026-11-08 16:01 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Last updated: 2026-11-08 17:38 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 ---
 
@@ -36,7 +36,7 @@ AB1 2CD", `192.168.1.20`, `labels.home.example`).
 - **Optional password** (off by default): scrypt hash in `/data/auth.json`,
   signed session cookie (30 days) for browsers, HTTP Basic auth for scripts.
 
-**Ideas, not started (don't start without Ash asking):**
+**Ideas, not started yet:**
 - Address lookup from Google Contacts (People API).
 - Guest Wi-Fi: per-guest UniFi hotspot vouchers printed as QR/code labels.
 - Pick network devices and battery devices from Home Assistant (battery
@@ -70,8 +70,8 @@ AB1 2CD", `192.168.1.20`, `labels.home.example`).
   defaults keep it narrow: the container port is bound to **`127.0.0.1`**
   (host-only), and the README recommends a reverse proxy with an access
   profile allowing only trusted subnets. Don't loosen these defaults.
-- The password is **optional and off by default** (Ash's own install has
-  none because it's only reachable from his trusted network).
+- The password is **optional and off by default** (fine for installs only
+  reachable from a trusted network).
 - Never return or log the password hash; `GET /api/settings` only exposes
   `password_set`. `auth.json` and `secret.key` are written with mode 600
   and are git-ignored. Changing/removing the password needs the current one.
@@ -101,7 +101,7 @@ Adding a label type = a function in `labels.py` registered in `RENDERERS`,
 plus a `<form data-kind="...">` and tab in `index.html`. The API picks it up
 automatically.
 
-## Conventions Ash wants
+## Coding conventions
 
 - **Comments:** every function gets a short comment/docstring; comment enough
   that a programmer can follow options and logic.
@@ -110,7 +110,7 @@ automatically.
   whenever you change a file.
 - **UK English**, UK date format on labels (`7 Nov 2026`), °C.
 - Keep dependencies pinned; prefer the standard library and small libraries.
-- Work on a branch and open a PR unless Ash says otherwise.
+- Work on a branch and open a pull request; don't commit straight to `main`.
 
 ## Testing without the printer
 
