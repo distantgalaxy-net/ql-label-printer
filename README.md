@@ -3,7 +3,7 @@
 Print useful labels on a Brother QL label printer from your phone or from
 Home Assistant.
 
-_Updated: 2026-11-09 00:50 GMT · Developer: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Updated: 2026-11-09 02:10 GMT · Developer: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 A small self-hosted web service, run in Docker (for example on a Synology
 NAS). It prints on a network-connected Brother QL printer from a
@@ -30,8 +30,8 @@ Home Assistant on the same host (optional)
 
 ## Label types
 
-Address (optional icon, including your own uploaded pictures; on Android,
-choose the address straight from your contacts) · Food
+Address (optional icon, including your own uploaded pictures; fill in
+from a contact card, or on Android straight from your contacts) · Food
 (freezer, fridge or cupboard: frozen/opened date, use-by in days or months,
 cooking instructions in °C or °F, notes, saved presets) · Travel (your
 saved details + flights, sorted and split into journeys, saved trips) ·
@@ -151,11 +151,9 @@ Then, if you like:
 - **Food tab:** fill in a food you make often and tap **Save as preset**.
   A preset keeps everything except the date: choosing it again fills in
   today's date and works out the use-by date afresh.
-- **Address tab → Choose from contacts** (Android phones): opens your
-  phone's contact list; pick a contact and its address is filled in. If
-  it has more than one address you're asked which one. Only the contact
-  you pick is shared with the page, and it isn't saved anywhere. See
-  [Choosing addresses from contacts](#choosing-addresses-from-contacts).
+- **Address tab → Import contact card** (any device) or **Choose from
+  contacts** (Android): fill in an address from your contacts. See
+  [Filling in addresses from contacts](#filling-in-addresses-from-contacts).
 - **Address tab → Your own icons:** upload a picture; it's converted to a
   black-and-white square. Delete it there too.
 
@@ -165,23 +163,36 @@ appear right next to the button you pressed.
 Everything is saved in the `data/` folder (never in this repo or the
 published image), so it survives updates and is included in your backups.
 
-## Choosing addresses from contacts
+## Filling in addresses from contacts
 
-The Address tab can fill in a name and address from your phone's
-contacts, using the browser's built-in contact picker:
+The Address tab can fill in a name and address from your contacts in two
+ways. Either way, only the contact you choose is used, it only fills in
+the form, and nothing is saved or uploaded.
 
-| Device | Works? |
-|---|---|
-| Android phone, Chrome | Yes – tap **Choose from contacts** |
-| iPhone, Safari | Only if Safari's *Contact Picker API* feature flag is on (Settings → Apps → Safari → Advanced → Feature Flags). Not tested. |
-| Laptop / desktop | No – browsers on computers don't offer a contact picker |
+**Import contact card** – works on every device. A contact card is a
+`.vcf` (vCard) file:
 
-**It needs HTTPS.** Phones only allow the contact picker on secure pages,
-so open the label printer through an `https://` address. On Synology:
-Control Panel → Login Portal → Advanced → Reverse Proxy, set the source
-protocol to **HTTPS**, and give that host name a certificate (Control
-Panel → Security → Certificate). Over plain `http://` the page shows a
-note instead of the button.
+- **Google Contacts** (contacts.google.com): tick the contact(s) →
+  **Export** → **vCard**.
+- **Mac Contacts:** drag the contact to the desktop, or File → Export →
+  Export vCard.
+- **Outlook:** save or export the contact as a vCard.
+- **iPhone:** Contacts → open the contact → **Share Contact** → **Save to
+  Files**, then tap **Import contact card**.
+
+On a computer you can also drop the file onto the Address tab. A file can
+hold many contacts (e.g. a whole Google export): you'll get a list of
+names to choose from, with a search box for long lists. The file is read
+in your browser and never sent to the server.
+
+**Choose from contacts** – Android phones only (Chrome). Opens your
+phone's own contact list; pick a contact and its address is filled in.
+It needs an `https://` address: Android only allows the contact picker
+on secure pages. (iPhones can't do this: Safari's contact picker only
+shares names, emails and phone numbers – import a contact card instead.)
+
+If a contact has more than one address you're asked which one; there's
+never a default.
 
 ## Optional password
 

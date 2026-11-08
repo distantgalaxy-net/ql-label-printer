@@ -3,7 +3,7 @@
 Read this before changing the code. It explains what we're building, the decisions already made
 and the constraints that aren't obvious from the code.
 
-_Last updated: 2026-11-09 01:20 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Last updated: 2026-11-09 02:10 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 ---
 
@@ -44,15 +44,21 @@ AB1 2CD", `192.168.1.20`, `labels.home.example`).
   in the browser's localStorage so the page and login page colour
   themselves before settings load. Success/error colours stay green/red
   whatever the accent.
-- **Contacts** (Address tab): the browser's Contact Picker API
+- **Contact cards** (Address tab): "Import contact card" reads a `.vcf`
+  in the browser (`parseVCards` in `index.html`: vCard 2.1/3.0/4.0,
+  folded lines, quoted-printable, Apple `itemN.X-ABLabel` labels). Never
+  uploaded or stored. Works on every device; computers can drop the file
+  on the Address tab. Several contacts → name list (search when > 8).
+- **Contact picker** (Address tab, Android only): the browser's Contact Picker API
   (`navigator.contacts.select(["name","address"])`), all in the page – no
   server code, nothing stored. Shown only when the API exists, the page is
   a secure context (HTTPS or localhost) and `address` is supported;
-  otherwise a message chosen by device type and `isSecureContext`
-  (phone over HTTP → needs a secure connection; computer over HTTP →
-  needs a secure connection and a phone; computer over HTTPS → needs a
-  phone; phone over HTTPS without a picker → Chrome on Android / Safari
-  feature flag). The browser sees the HTTPS hop to the reverse proxy, so
+  otherwise a note chosen by device type: Android over HTTP → needs a
+  secure connection; Android without a picker → needs Chrome; iPhone →
+  how to save a contact card; computer → how to export one. Safari's
+  picker only returns name/email/tel (WebKit `ContactsManager`), never
+  addresses, so iPhones use contact cards; if Apple adds addresses the
+  feature check shows the button automatically. The browser sees the HTTPS hop to the reverse proxy, so
   the plain-HTTP hop inside the NAS doesn't matter. Several
   addresses → the user picks one (no default). Tested with a stand-in
   picker only; Android Chrome is the target, iPhone untested.
@@ -214,6 +220,8 @@ image is valid for a model (it raises if the size is wrong).
   read into the flight boxes for checking, then added.
 - 2026-11-08 – Accent colour choice in Settings (green default; blue, red,
   pink, purple, orange, monochrome), each tuned for light and dark themes.
+- 2026-11-09 – Contact card (.vcf) import added for computers and iPhones
+  (Safari's picker can't share addresses). Read in the browser only.
 - 2026-11-09 – Contacts on phones via the browser's Contact Picker API
   rather than Google's People API: no Google sign-in or API keys, works
   with whatever account the phone uses, and the page only ever sees the
