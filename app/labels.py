@@ -1,6 +1,6 @@
 # ------------------------------------------------------------------
 # labelprinter - label layouts
-# Date: 2026-11-09 13:10 GMT (updated; first written 2026-11-07 18:10 GMT)
+# Date: 2026-11-09 13:50 GMT (updated; first written 2026-11-07 18:10 GMT)
 # Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
 #
 # Turns form data into a black-and-white image the exact width of the
@@ -127,13 +127,46 @@ def _icon_christmas(d):
     _star(d, 256, 70, 58, 24, fill=0)
 
 
+def _wavy(x, y, length, angle, amp=16, waves=2.0):
+    """Points along a wavy streamer starting at (x, y), heading at an angle (degrees)."""
+    import math
+    a = math.radians(angle)
+    ux, uy = math.cos(a), math.sin(a)
+    pts = []
+    for i in range(41):
+        t = i / 40
+        off = amp * math.sin(t * waves * 2 * math.pi)
+        pts.append((x + ux * length * t - uy * off, y + uy * length * t + ux * off))
+    return pts
+
+
 def _icon_celebration(d):
-    """Party popper: cone with streamers and confetti."""
-    d.polygon([(50, 470), (150, 190), (330, 370)], outline=0, width=LW)   # cone
-    d.line([(250, 240), (300, 170), (270, 110), (330, 50)], fill=0, width=LW, joint="curve")
-    d.line([(300, 300), (380, 270), (420, 320), (480, 290)], fill=0, width=LW, joint="curve")
-    for cx, cy in ((200, 80), (410, 120), (460, 200), (380, 420), (120, 120)):
-        d.rectangle((cx - 20, cy - 20, cx + 20, cy + 20), fill=0)        # confetti
+    """Party popper: striped cone bursting with curly streamers, stars and confetti."""
+    import math
+    tip, mouth = (52, 464), (196, 320)                   # cone point, middle of its mouth
+    half = 74                                            # half the mouth's width
+    ang = math.atan2(mouth[1] - tip[1], mouth[0] - tip[0])
+    px, py = -math.sin(ang), math.cos(ang)
+    m1 = (mouth[0] + px * half, mouth[1] + py * half)
+    m2 = (mouth[0] - px * half, mouth[1] - py * half)
+    d.polygon([tip, m1, m2], fill=0)
+    for t in (0.42, 0.68):                               # white stripes across the cone
+        a1 = (tip[0] + (m1[0] - tip[0]) * t, tip[1] + (m1[1] - tip[1]) * t)
+        a2 = (tip[0] + (m2[0] - tip[0]) * t, tip[1] + (m2[1] - tip[1]) * t)
+        d.line([a1, a2], fill=255, width=14)
+    for x, y, length, angle, amp, waves in ((214, 290, 210, -62, 18, 2.0),     # streamers
+                                            (230, 304, 230, -22, 18, 2.0),
+                                            (226, 340, 200, 18, 16, 1.5)):
+        d.line(_wavy(x, y, length, angle, amp, waves), fill=0, width=18, joint="curve")
+    _star(d, 330, 70, 44, 19, fill=0)                    # stars
+    _star(d, 466, 250, 38, 16, fill=0)
+    _star(d, 130, 150, 34, 15, fill=0)
+    for x, y, r in ((410, 120, 13), (250, 140, 11), (470, 400, 12), (360, 460, 10)):
+        d.ellipse((x - r, y - r, x + r, y + r), fill=0)  # round confetti
+    for x, y, turn in ((180, 70, 30), (440, 330, -20), (300, 420, 50)):
+        a = math.radians(turn)                           # small tilted strips of confetti
+        d.polygon([(x + cx * math.cos(a) - cy * math.sin(a), y + cx * math.sin(a) + cy * math.cos(a))
+                   for cx, cy in ((-16, -8), (16, -8), (16, 8), (-16, 8))], fill=0)
 
 
 def _icon_heart(d):
@@ -328,21 +361,28 @@ def _icon_flowers(d):
 
 
 def _icon_snowman(d):
-    """Snowman: body and head, top hat, scarf, face, buttons and stick arms."""
-    d.ellipse((136, 236, 376, 476), outline=0, width=LW)            # body
-    d.ellipse((181, 106, 331, 256), fill=255, outline=0, width=LW)  # head, in front of the body
-    d.rectangle((196, 30, 316, 112), fill=0)                       # hat
-    d.rectangle((166, 100, 346, 124), fill=0)                      # hat brim
-    for x in (230, 282):                                            # eyes
-        d.ellipse((x - 13, 160, x + 13, 186), fill=0)
-    d.arc((222, 172, 290, 226), 30, 150, fill=0, width=10)          # smile
-    d.rounded_rectangle((176, 240, 336, 274), radius=12, fill=0)    # scarf round the neck
-    d.polygon([(286, 262), (322, 262), (330, 336), (296, 330)], fill=0)   # scarf end
-    for y in (330, 380, 428):                                       # buttons
-        d.ellipse((243, y - 13, 269, y + 13), fill=0)
-    for side in (-1, 1):                                            # stick arms with a twig each
-        d.line([(256 + side * 106, 320), (256 + side * 186, 260)], fill=0, width=18)
-        d.line([(256 + side * 160, 280), (256 + side * 176, 236)], fill=0, width=14)
+    """Snowman: two snowballs, top hat, carrot nose sticking out, scarf, buttons, twig arms."""
+    cx = 256
+
+    def ball(y, r, width=LW):
+        """A snowball: white inside (hides what's behind it), black outline."""
+        d.ellipse((cx - r, y - r, cx + r, y + r), fill=255, outline=0, width=width)
+
+    for side in (-1, 1):                                 # twig arms, behind the body
+        d.line([(cx + side * 100, 330), (cx + side * 214, 250)], fill=0, width=20)
+        d.line([(cx + side * 180, 274), (cx + side * 186, 226)], fill=0, width=14)
+    ball(364, 124)                                       # body
+    ball(164, 70, width=30)                              # head
+    d.rectangle((cx - 50, 18, cx + 50, 102), fill=0)     # top hat...
+    d.rounded_rectangle((cx - 82, 92, cx + 82, 116), radius=10, fill=0)   # ...its brim
+    d.rectangle((cx - 50, 76, cx + 50, 86), fill=255)    # ...and a white band
+    for x in (cx - 26, cx + 14):                         # eyes
+        d.ellipse((x - 11, 142, x + 11, 164), fill=0)
+    d.polygon([(cx + 8, 168), (cx + 8, 198), (cx + 110, 186)], fill=0)   # carrot nose
+    d.rounded_rectangle((cx - 82, 222, cx + 82, 254), radius=14, fill=0)   # scarf
+    d.polygon([(cx - 70, 240), (cx - 34, 240), (cx - 38, 326), (cx - 74, 322)], fill=0)   # scarf tail
+    for y in (300, 352, 404):                            # buttons
+        d.ellipse((cx - 13, y - 13, cx + 13, y + 13), fill=0)
 
 
 def _icon_snowflake(d):
