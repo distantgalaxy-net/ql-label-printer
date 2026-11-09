@@ -3,7 +3,7 @@
 Read this before changing the code. It explains what we're building, the decisions already made
 and the constraints that aren't obvious from the code.
 
-_Last updated: 2026-11-09 16:20 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Last updated: 2026-11-09 17:10 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 ---
 
@@ -67,8 +67,10 @@ AB1 2CD", `192.168.1.20`, `labels.home.example`).
   request (`ESC i S`) on that connection, decoded with brother_ql's
   `interpret_response`; if no reply in 2 s, SNMP v1 GET-NEXT (stdlib
   only, community `public`) for hrPrinterDetectedErrorState,
-  hrDeviceStatus, prtInputMediaName and prtCoverStatus. No answer to
-  either → treated as ready (reachable, status unknown). Status checks take
+  hrDeviceStatus, prtInputMediaName and prtCoverStatus, plus the alert
+  table (prtAlertCode/prtAlertDescription, up to 6 rows) and display text;
+  SNMP is only skipped if sysDescr gets no answer. No status from either
+  → "Printer connected" (reachable, status unknown; printing allowed). Status checks take
   the printer job lock, so they never overlap a print. The page checks on
   load, after printing, on becoming visible, and every 30 s while not
   ready; Print stays disabled until a check says ready. Home Assistant

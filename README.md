@@ -3,7 +3,7 @@
 Print useful labels on a Brother QL label printer from your phone or from
 Home Assistant.
 
-_Updated: 2026-11-09 16:20 GMT · Developer: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Updated: 2026-11-09 17:10 GMT · Developer: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 A small self-hosted web service, run in Docker (for example on a Synology
 NAS). It prints on a network-connected Brother QL printer from a
@@ -164,7 +164,9 @@ The page checks the printer when it opens (and after printing, and when
 you come back to it). If the printer can't print, **Print** is disabled
 with the reason – *Printer unavailable*, *Printer cover open*, *Label
 spool finished* or *Fit 62mm continuous label* – and a **Check again**
-button. When all is well it shows e.g. *Printer ready · 62mm continuous*.
+button. When all is well it shows e.g. *Printer ready · 62mm continuous*,
+or *Printer connected* if the printer can be reached but won't report its
+status (then cover and roll problems can't be detected).
 Which of these your printer can report depends on the model: every
 printer can report *unavailable*; the roll and cover need the printer to
 answer status requests over the network (Settings → **Printer status →

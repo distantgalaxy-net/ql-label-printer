@@ -1,6 +1,6 @@
 # ------------------------------------------------------------------
 # labelprinter - is the printer ready, and what roll is loaded?
-# Date: 2026-11-09 09:40 GMT
+# Date: 2026-11-09 17:00 GMT (updated; first written 2026-11-09 09:40 GMT)
 # Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
 #
 # check(host, port) answers, without printing anything:
@@ -12,11 +12,13 @@
 #      says which roll is loaded and whether the cover is open, the roll
 #      has run out, etc. (decoded by brother_ql's interpret_response).
 #   3. If (2) gets no reply: SNMP, the standard way network printers
-#      report status (UDP port 161, read-only community "public"). We ask
-#      for the Printer/Host Resources MIB values for errors (no paper,
-#      door open, jammed) and the loaded media's name.
+#      report status (UDP port 161, read-only community "public"). First
+#      the printer's description (to see if SNMP answers at all), then the
+#      Printer/Host Resources MIB values: error flags (no paper, door open,
+#      jammed), cover status, the printer's current alerts (code and
+#      text, e.g. "Cover Open"), its display text and the loaded media.
 #   If neither (2) nor (3) answers, the printer is reachable but its
-#   status is unknown, and printing is allowed.
+#   status is unknown: "Printer connected", and printing is allowed.
 #
 # Everything found is also returned under "detail" (raw bytes in hex,
 # SNMP values), so the Settings tab can show exactly what the printer
@@ -46,6 +48,7 @@ STATUS_REQUEST = b"\x00" * 200 + b"\x1b\x40" + b"\x1biS"
 # Messages shown under the Print button (and the state names the page uses)
 MESSAGES = {
     "ready": "Printer ready",
+    "connected": "Printer connected",          # reachable, but it won't report its status
     "unavailable": "Printer unavailable",
     "cover_open": "Printer cover open",
     "no_media": "Label spool finished",
@@ -86,12 +89,12 @@ def check(host, port):
     if snmp:
         return _from_snmp(snmp, detail)
     # Reachable, but it won't say more: let the user print
-    return _result("ready", source="connection", detail=detail)
+    return _result("connected", source="connection", detail=detail)
 
 
 def _result(state, media=None, source="connection", detail=None):
     """Build the reply dict for a state."""
-    return {"ok": state == "ready", "state": state, "message": MESSAGES[state],
+    return {"ok": state in ("ready", "connected"), "state": state, "message": MESSAGES[state],
             "media": media, "source": source, "detail": detail or {}}
 
 
@@ -140,6 +143,8 @@ def _from_brother(info, detail):
 # ---------------------------------------------------------------- SNMP
 # Standard MIB objects (first row of each table, found with GET-NEXT so the
 # printer's own row numbers don't matter):
+# The first answer tells us SNMP is working: sysDescr, the printer's description
+DESCRIPTION_OID = "1.3.6.1.2.1.1.1"
 OIDS = {
     # hrPrinterDetectedErrorState: bit flags (see _from_snmp)
     "error_state": "1.3.6.1.2.1.25.3.5.1.2",
@@ -149,29 +154,58 @@ OIDS = {
     "media_name": "1.3.6.1.2.1.43.8.2.1.12",
     # prtCoverStatus: 3 open, 4 closed (5/6 interlock open/closed)
     "cover_status": "1.3.6.1.2.1.43.6.1.1.3",
+    # prtConsoleDisplayBufferText: what the printer's display/status says
+    "display": "1.3.6.1.2.1.43.16.5.1.2",
 }
+# The printer's current alerts: one row per problem (read up to ALERT_ROWS)
+ALERT_OIDS = {
+    # prtAlertCode: 3 cover open, 5 interlock open, 8 jam,
+    # 807 media supply low, 808 media supply empty, 801 tray missing
+    "alert_codes": "1.3.6.1.2.1.43.18.1.1.7",
+    # prtAlertDescription: text such as "Cover Open" or "Replace Media"
+    "alert_texts": "1.3.6.1.2.1.43.18.1.1.8",
+}
+ALERT_ROWS = 6
 
 
 def _snmp_status(host):
-    """Ask the printer for the OIDS over SNMP v1. Returns {name: value} or {}."""
+    """Ask the printer for its status over SNMP v1. Returns {name: value} or {}.
+
+    Gives up straight away if the printer doesn't answer the first question
+    (its description); otherwise asks everything in OIDS and ALERT_OIDS, so a
+    printer that only supports some of them still reports what it can.
+    """
     found = {}
     try:
         family = socket.AF_INET6 if ":" in host else socket.AF_INET
         with socket.socket(family, socket.SOCK_DGRAM) as sock:
             sock.settimeout(SNMP_TIMEOUT)
+            first = _snmp_getnext(sock, host, DESCRIPTION_OID)
+            if first is None:
+                return {}                                    # no SNMP
+            found["description"] = first[1]
             for name, oid in OIDS.items():
                 answer = _snmp_getnext(sock, host, oid)
-                if answer is None and not found:
-                    return {}            # first question unanswered: no SNMP
                 if answer is not None:
-                    found[name] = answer
+                    found[name] = answer[1]
+            for name, oid in ALERT_OIDS.items():
+                rows, current = [], oid
+                for _ in range(ALERT_ROWS):                  # walk the table row by row
+                    answer = _snmp_getnext(sock, host, current, within=oid)
+                    if answer is None:
+                        break
+                    current = answer[0]
+                    rows.append(answer[1])
+                if rows:
+                    found[name] = rows
     except OSError:
         return found
     return found
 
 
-def _snmp_getnext(sock, host, base_oid):
-    """One SNMP v1 GET-NEXT. Returns the value if it's under base_oid, else None."""
+def _snmp_getnext(sock, host, base_oid, within=None):
+    """One SNMP v1 GET-NEXT after base_oid. Returns (oid, value) if the answer
+    is still under `within` (default: base_oid itself), else None."""
     request_id = random.randint(1, 0x7FFFFFFF)
     varbind = _tlv(0x30, _tlv(0x06, _oid(base_oid)) + b"\x05\x00")
     pdu = _tlv(0xA1, _int(request_id) + _int(0) + _int(0) + _tlv(0x30, varbind))
@@ -184,7 +218,7 @@ def _snmp_getnext(sock, host, base_oid):
         oid, value = _parse_response(data, request_id)
     except (ValueError, IndexError):
         return None
-    return value if oid.startswith(base_oid + ".") else None
+    return (oid, value) if oid.startswith((within or base_oid) + ".") else None
 
 
 def _tlv(tag, body):
@@ -272,25 +306,34 @@ def _parse_response(data, request_id):
 def _from_snmp(snmp, detail):
     """Turn SNMP values into our state.
 
-    hrPrinterDetectedErrorState bits (first byte, most significant first):
-    lowPaper, noPaper, lowToner, noToner, doorOpen, jammed, offline,
-    serviceRequested.
+    Looks at, in order: the printer's alerts (codes and text), the cover
+    status, the hrPrinterDetectedErrorState flags (first byte, most
+    significant bit first: lowPaper, noPaper, lowToner, noToner, doorOpen,
+    jammed, offline, serviceRequested), the display text, the device status
+    and the media name. If the printer answers SNMP but reports nothing
+    useful, it's "connected" (status unknown) rather than "ready".
     """
     flags = 0
     raw = snmp.get("error_state")
     if isinstance(raw, str) and re.fullmatch(r"[0-9a-f]+", raw):
         flags = int(raw[:2] or "0", 16)
+    codes = [c for c in snmp.get("alert_codes") or [] if isinstance(c, int)]
+    words = " ".join(str(t) for t in (snmp.get("alert_texts") or []) + [snmp.get("display") or ""]).lower()
     media_name = snmp.get("media_name") if isinstance(snmp.get("media_name"), str) else None
-    if flags & 0x08 or snmp.get("cover_status") in (3, 5):
+
+    if 3 in codes or 5 in codes or snmp.get("cover_status") in (3, 5) or flags & 0x08 or "cover" in words:
         state = "cover_open"
-    elif flags & 0x40:
+    elif 808 in codes or 801 in codes or flags & 0x40 or re.search(
+            r"(no|out of|replace|end of|empty)\s*(media|paper|label|roll|tape)|(media|paper|label|roll|tape)\s*(empty|end|out)", words):
         state = "no_media"
-    elif flags & 0x04 or snmp.get("device_status") == 5:
+    elif 8 in codes or flags & 0x04 or snmp.get("device_status") == 5:
         state = "error"
     elif media_name and _wrong_media(media_name):
         state = "wrong_media"
+    elif any(k in snmp for k in ("error_state", "device_status", "cover_status", "alert_codes", "media_name")):
+        state = "ready"                  # it reports status, and nothing is wrong
     else:
-        state = "ready"
+        state = "connected"              # SNMP answers, but says nothing about status
     return _result(state, media=media_name, source="snmp", detail=detail)
 
 

@@ -1,7 +1,7 @@
 <!doctype html>
 <!--
   labelprinter - label printing page (phone-first)
-  Date: 2026-11-09 10:40 GMT (updated; first written 2026-11-07 18:15 GMT)
+  Date: 2026-11-09 17:00 GMT (updated; first written 2026-11-07 18:15 GMT)
   Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
   One form per label type; the preview updates as you type, then Print.
   The Settings tab holds the printer (model, IP address, port), the time
@@ -583,7 +583,10 @@ function showPrinterState() {
   if (printerChecking && !printerState) { box.className = "pstate"; text.textContent = "Checking printer…"; $("pstate-retry").hidden = true; }
   else if (printerState && printerState.ok) {
     box.className = "pstate";
-    text.textContent = printerState.media ? `Printer ready · ${printerState.media}` : "Printer ready";
+    // "Printer ready · 62mm continuous", or "Printer connected" when the
+    // printer won't say more than that it's reachable
+    const msg = printerState.message || "Printer ready";
+    text.textContent = printerState.media ? `${msg} · ${printerState.media}` : msg;
     $("pstate-retry").hidden = true;
   } else if (printerState) {
     box.className = "pstate bad"; text.textContent = printerState.message || "Printer unavailable";
