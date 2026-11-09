@@ -1,6 +1,6 @@
 # ------------------------------------------------------------------
 # labelprinter - label print service (web page + API)
-# Date: 2026-11-09 10:40 GMT (updated; first written 2026-11-07 18:10 GMT)
+# Date: 2026-11-09 18:50 GMT (updated; first written 2026-11-07 18:10 GMT)
 # Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
 #
 # Serves the phone-friendly web page and a small JSON API:
@@ -414,7 +414,14 @@ def preview(kind):
 
 @app.post("/api/print/<kind>")
 def do_print(kind):
-    """Render a label and send it to the printer saved in settings."""
+    """Render a label and send it to the printer saved in settings.
+
+    Just before sending, the printer's status is checked (status.py). If it
+    reports a problem (unavailable, cover open, no roll, wrong roll, error)
+    nothing is sent: the reply is 409 with the reason and the full status
+    under "printer", so the page can disable Print. A printer that can't
+    report its status is printed to as before. Applies to Home Assistant too.
+    """
     problem = setup_problem(load_settings())
     if problem:
         return jsonify({"ok": False, "message": problem}), 409
@@ -427,6 +434,12 @@ def do_print(kind):
     except (TypeError, ValueError):
         copies = 1
     target = load_settings()["printer"]
+    # Check first, so a label isn't sent into an open or empty printer
+    # (the printer can't tell us afterwards whether a label came out)
+    with printer.job_lock():
+        state = printer_status.check(target.get("host"), target.get("port") or printer.DEFAULT_PORT)
+    if not state["ok"]:
+        return jsonify({"ok": False, "message": f"Not printed: {state['message']}", "printer": state}), 409
     ok, message = printer.print_image(img, target.get("host"), target.get("port"),
                                       target.get("model"), copies)
     return jsonify({"ok": ok, "message": message}), (200 if ok else 502)

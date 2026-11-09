@@ -3,7 +3,7 @@
 Print useful labels on a Brother QL label printer from your phone or from
 Home Assistant.
 
-_Updated: 2026-11-09 18:30 GMT · Developer: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Updated: 2026-11-09 19:00 GMT · Developer: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 A small self-hosted web service, run in Docker (for example on a Synology
 NAS). It prints on a network-connected Brother QL printer from a
@@ -162,7 +162,10 @@ appear right next to the button you pressed.
 
 The page checks the printer when it opens, after printing, when you come
 back to it, and every minute while it's open (every 30 seconds while
-there's a problem). If the printer can't print, **Print** is disabled
+there's a problem). The printer is also checked just before every print
+(from the page or Home Assistant): if it reports a problem, nothing is
+sent and the reply says why (HTTP 409, e.g. *Not printed: Printer cover
+open*). If the printer can't print, **Print** is disabled
 with the reason – *Printer unavailable*, *Printer cover open*, *Label
 spool finished* or *Fit 62mm continuous label* – and a **Check again**
 button. When all is well it shows e.g. *Printer ready · 62mm continuous*,
@@ -333,7 +336,7 @@ data:
 | Call | Purpose |
 |---|---|
 | `POST /api/preview/<type>` | PNG preview (header `X-Label-Length-mm`) |
-| `POST /api/print/<type>` | Print → `{"ok": true/false, "message": "…"}` (add `"copies": n`) |
+| `POST /api/print/<type>` | Print → `{"ok": true/false, "message": "…"}` (add `"copies": n`). Checks the printer first: if it reports a problem nothing is sent and the reply is HTTP 409 with the reason, plus the full status under `printer`. |
 | `GET/PUT /api/settings` | Saved details (`me`), `food_presets`, `trips`, battery types, `printer` (`host`, `port`, `model`), `timezone` (e.g. `Europe/London`), `temp_unit` (`C`/`F`), `accent` (`green`/`blue`/`red`/`pink`/`purple`/`orange`/`mono`); `password_set` is read-only |
 | `GET /api/options` | Printer models and time zone names |
 | `GET /api/printer/status` | Is the printer ready and which roll is loaded → `{"ok", "state", "message", "media", "source", "detail"}`; `state` is `ready`, `unavailable`, `cover_open`, `no_media`, `wrong_media` or `error`. Prints nothing. |

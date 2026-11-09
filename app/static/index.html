@@ -1,7 +1,7 @@
 <!doctype html>
 <!--
   labelprinter - label printing page (phone-first)
-  Date: 2026-11-09 18:20 GMT (updated; first written 2026-11-07 18:15 GMT)
+  Date: 2026-11-09 18:50 GMT (updated; first written 2026-11-07 18:15 GMT)
   Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
   One form per label type; the preview updates as you type, then Print.
   The Settings tab holds the printer (model, IP address, port), the time
@@ -565,9 +565,18 @@ $("print").addEventListener("click", async () => {
   // The server's message: "Label sent to printer" or what went wrong
   say("msg-print", res.body.message || (res.ok ? "Label sent to printer" : "Printing failed"), res.ok ? "ok" : "bad");
   printing = false; btn.textContent = "Print"; showPrintButton();
-  // Look again once the printer has had a moment (e.g. the roll may have
-  // just run out); straight away if the print failed
-  setTimeout(checkPrinter, res.ok ? 4000 : 0);
+  // The server checks the printer before sending; if it refused because of
+  // the printer's state, show that state now (Print greys out with the reason)
+  if (res.body.printer && res.body.printer.state) {
+    say("msg-print", "");          // the printer state box below says why, once
+    printerState = res.body.printer; showPrinterState();
+    clearTimeout(printerTimer);
+    printerTimer = setTimeout(() => { if (!document.hidden) checkPrinter(); }, 30000);
+  } else {
+    // Look again once the printer has had a moment (e.g. the roll may have
+    // just run out); straight away if the print failed for another reason
+    setTimeout(checkPrinter, res.ok ? 4000 : 0);
+  }
 });
 
 // ---- printer state ----------------------------------------------------

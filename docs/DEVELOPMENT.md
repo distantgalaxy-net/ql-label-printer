@@ -3,7 +3,7 @@
 Read this before changing the code. It explains what we're building, the decisions already made
 and the constraints that aren't obvious from the code.
 
-_Last updated: 2026-11-09 18:30 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Last updated: 2026-11-09 19:00 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 ---
 
@@ -75,7 +75,9 @@ AB1 2CD", `192.168.1.20`, `labels.home.example`).
   load, after printing, on becoming visible, and while visible every 60 s
   (heartbeat) or every 30 s while not ready; Print stays disabled until a
   check says ready. A printer that ignores `ESC i S` is remembered for an
-  hour so checks go straight to SNMP. Home Assistant
+  hour so checks go straight to SNMP. `/api/print` also checks just before
+  sending (under the job lock) and refuses with 409 + `printer` if the
+  printer reports a problem; printers with unknown status print as before. Home Assistant
   printing isn't blocked by it. **Verified on a QL-810W:** no reply to
   `ESC i S` over Wi-Fi; SNMP works (alert 3 = cover open, 808 = no roll,
   media name e.g. `62mm / 2.4"` or `29mm x 90mm / 1.1" x 3.5"`). Needs
