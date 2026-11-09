@@ -3,7 +3,7 @@
 Print useful labels on a Brother QL label printer from your phone or from
 Home Assistant.
 
-_Updated: 2026-11-09 19:20 GMT · Developer: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Updated: 2026-11-09 19:40 GMT · Developer: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 A small self-hosted web service, run in Docker (for example on a Synology
 NAS). It prints on a network-connected Brother QL printer from a
@@ -289,9 +289,9 @@ icons**, each in alphabetical order.
 To add your own, open **Address → Your own icons**, give it a name and
 choose a picture (PNG, JPEG, GIF, WebP or BMP, up to 10 MB). It's trimmed,
 fitted into a square and converted to pure black and white, then saved in
-`data/icons/`. Using a built-in's name (e.g. `gift`) replaces that built-in
-until you delete yours. You can also copy black-on-white PNGs into
-`data/icons/` directly.
+`data/icons/`. Names must be new: an upload with the same name as one of
+your icons or a built-in one is refused (delete yours first to replace
+it). You can also copy black-on-white PNGs into `data/icons/` directly.
 
 ## Troubleshooting
 

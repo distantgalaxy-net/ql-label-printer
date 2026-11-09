@@ -1,7 +1,7 @@
 <!doctype html>
 <!--
   labelprinter - label printing page (phone-first)
-  Date: 2026-11-09 19:20 GMT (updated; first written 2026-11-07 18:15 GMT)
+  Date: 2026-11-09 19:40 GMT (updated; first written 2026-11-07 18:15 GMT)
   Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
   One form per label type; the preview updates as you type, then Print.
   The Settings tab holds the printer (model, IP address, port), the time
@@ -958,7 +958,12 @@ $("i-upload").addEventListener("click", async () => {
   const file = $("i-file").files[0], name = $("i-name").value.trim();
   if (!file) { say("msg-icons", "Choose a picture first", "bad"); return; }
   if (!name) { say("msg-icons", "Give the icon a name", "bad"); return; }
-  if (icons.some(i => i.name === name.toLowerCase() && i.custom) && !confirm(`Replace your icon “${name}”?`)) return;
+  // Names must be new (the server checks too, and says why)
+  const taken = icons.find(i => i.name === name.trim().toLowerCase().replace(/\s+/g, " "));
+  if (taken) {
+    say("msg-icons", `There's already ${taken.custom ? "one of your icons" : "a built-in icon"} called “${name.trim()}”. Choose another name${taken.custom ? ", or delete yours first" : ""}.`, "bad");
+    return;
+  }
   const btn = $("i-upload"); btn.disabled = true; btn.textContent = "Uploading…";
   const fd = new FormData(); fd.append("name", name); fd.append("file", file);
   let j = {};

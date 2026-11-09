@@ -1,6 +1,6 @@
 # ------------------------------------------------------------------
 # labelprinter - label layouts
-# Date: 2026-11-09 19:20 GMT (updated; first written 2026-11-07 18:10 GMT)
+# Date: 2026-11-09 19:40 GMT (updated; first written 2026-11-07 18:10 GMT)
 # Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
 #
 # Turns form data into a black-and-white image the exact width of the
@@ -533,8 +533,9 @@ def list_icons():
     """All icons for the page: custom ones first, then built-ins, each group
     in alphabetical order.
 
-    Each entry is {"name", "custom"}. A custom icon with a built-in's name
-    replaces that built-in; deleting it brings the built-in back.
+    Each entry is {"name", "custom"}. Uploads can't reuse a name, but a PNG
+    copied into ICON_DIR by hand with a built-in's name replaces that
+    built-in (deleting it brings the built-in back).
     """
     custom = sorted(_custom_names(), key=str.lower)
     builtin = sorted((k for k in BUILTIN_ICONS if k not in custom), key=str.lower)
@@ -571,10 +572,16 @@ def save_custom_icon(name, stream):
     turned to greyscale, trimmed to its content, fitted into a 512-dot
     square and converted to pure black and white, then saved as
     <name>.png in ICON_DIR. On the label it prints about 16mm square.
+    Names must be new: a name already used by one of your icons or a
+    built-in icon is refused (delete yours first to replace it).
     """
     name = clean_icon_name(name)
     if not name or name == "none":
         return None, "Give the icon a name: letters, numbers, spaces or hyphens (up to 30)."
+    if name in BUILTIN_ICONS:
+        return None, f"There's already a built-in icon called “{name}”. Choose another name."
+    if os.path.exists(os.path.join(ICON_DIR, f"{name}.png")):
+        return None, f"You already have an icon called “{name}”. Choose another name, or delete yours first."
     try:
         img = Image.open(stream)
         if img.format not in UPLOAD_FORMATS:

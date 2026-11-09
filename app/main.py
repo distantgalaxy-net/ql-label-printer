@@ -1,6 +1,6 @@
 # ------------------------------------------------------------------
 # labelprinter - label print service (web page + API)
-# Date: 2026-11-09 18:50 GMT (updated; first written 2026-11-07 18:10 GMT)
+# Date: 2026-11-09 19:40 GMT (updated; first written 2026-11-07 18:10 GMT)
 # Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
 #
 # Serves the phone-friendly web page and a small JSON API:
@@ -339,7 +339,7 @@ def upload_icon():
     """Save an uploaded picture as a custom icon (multipart form: name, file).
 
     The picture is converted to a black-and-white square in /data/icons.
-    Using a built-in icon's name replaces that built-in until it's deleted.
+    A name already used (by your icons or a built-in one) is refused.
     """
     upload = request.files.get("file")
     if not upload:
