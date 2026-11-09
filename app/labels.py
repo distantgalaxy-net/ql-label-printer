@@ -1,6 +1,6 @@
 # ------------------------------------------------------------------
 # labelprinter - label layouts
-# Date: 2026-11-08 22:40 GMT (updated; first written 2026-11-07 18:10 GMT)
+# Date: 2026-11-09 11:50 GMT (updated; first written 2026-11-07 18:10 GMT)
 # Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
 #
 # Turns form data into a black-and-white image the exact width of the
@@ -175,9 +175,93 @@ def _icon_balloon(d):
 
 
 def _icon_wedding(d):
-    """Two interlocking rings."""
-    d.ellipse((60, 160, 300, 400), outline=0, width=LW)
-    d.ellipse((212, 160, 452, 400), outline=0, width=LW)
+    """Two wedding rings, linked (one in front at each crossing), with a diamond."""
+    import math
+    r = 120                                   # ring radius
+    ax, bx, cy = 186, 326, 330                # ring centres (left, right) and height
+    ra = (ax - r, cy - r, ax + r, cy + r)
+    rb = (bx - r, cy - r, bx + r, cy + r)
+    # Diamond sitting on top of the left ring: solid, with a white girdle line
+    top = cy - r - 138
+    gem = [(ax - 68, top + 50), (ax - 36, top), (ax + 36, top), (ax + 68, top + 50), (ax, top + 140)]
+    d.polygon(gem, fill=0)
+    d.line([(ax - 50, top + 50), (ax + 50, top + 50)], fill=255, width=12)
+    d.ellipse(ra, outline=0, width=LW)
+    d.ellipse(rb, outline=0, width=LW)
+    # Where the rings cross (worked out, so it stays right if sizes change).
+    # PIL angles: 0 = 3 o'clock, increasing clockwise.
+    half = (bx - ax) / 2
+    dy = math.sqrt(r * r - half * half)
+    a_top = math.degrees(math.atan2(-dy, half)) % 360      # top crossing, on the left ring
+    b_top = math.degrees(math.atan2(-dy, -half)) % 360     # top crossing, on the right ring
+    a_bot, b_bot = (360 - a_top) % 360, (360 - b_top) % 360
+
+    def crossing(behind, front, behind_deg, front_deg):
+        """Break the ring behind just wider than the front ring, then redraw the front."""
+        d.arc((behind[0] - 6, behind[1] - 6, behind[2] + 6, behind[3] + 6),
+              behind_deg - 10, behind_deg + 10, fill=255, width=LW + 12)
+        d.arc(front, front_deg - 16, front_deg + 16, fill=0, width=LW)
+    crossing(rb, ra, b_top, a_top)            # top: left ring in front
+    crossing(ra, rb, a_bot, b_bot)            # bottom: right ring in front
+
+
+def _rotate(points, cx, cy, degrees):
+    """Turn (x, y) points about (cx, cy) by an angle (clockwise on screen)."""
+    import math
+    a = math.radians(degrees)
+    c, s = math.cos(a), math.sin(a)
+    return [(cx + (x - cx) * c - (y - cy) * s, cy + (x - cx) * s + (y - cy) * c) for x, y in points]
+
+
+def _rounded_bar(cx, cy, length, height):
+    """Outline points of a bar with round ends, centred on (cx, cy)."""
+    import math
+    r = height / 2
+    left, right = cx - length / 2 + r, cx + length / 2 - r
+    pts = [(right + r * math.cos(math.radians(a)), cy + r * math.sin(math.radians(a))) for a in range(-90, 91, 6)]
+    pts += [(left + r * math.cos(math.radians(a)), cy + r * math.sin(math.radians(a))) for a in range(90, 271, 6)]
+    return pts
+
+
+def _heart_points(cx, cy, scale, point_to):
+    """Heart outline centred on (cx, cy) with its point aimed at an angle (0 = right, 90 = down)."""
+    import math
+    pts = []
+    for i in range(0, 361, 4):
+        t = math.radians(i)
+        x = 16 * math.sin(t) ** 3
+        y = -(13 * math.cos(t) - 5 * math.cos(2 * t) - 2 * math.cos(3 * t) - math.cos(4 * t))
+        pts.append((cx + x * scale, cy + y * scale))
+    return _rotate(pts, cx, cy, point_to - 90)      # drawn pointing down; turn it
+
+
+def _icon_get_well(d):
+    """Get well: a sticking plaster at 45 degrees with a pad and air holes."""
+    cx = cy = 256
+    strip = _rotate(_rounded_bar(cx, cy, 470, 170), cx, cy, -45)
+    d.line(strip + strip[:2], fill=0, width=LW, joint="curve")
+    pad = _rotate([(cx - 80, cy - 85), (cx + 80, cy - 85), (cx + 80, cy + 85), (cx - 80, cy + 85)], cx, cy, -45)
+    d.line(pad + pad[:2], fill=0, width=LW - 6, joint="curve")
+    for dx in (-160, -125, 125, 160):                # air holes at both ends
+        for dy in (-30, 30):
+            (x, y), = _rotate([(cx + dx, cy + dy)], cx, cy, -45)
+            d.ellipse((x - 11, y - 11, x + 11, y + 11), fill=0)
+
+
+def _icon_good_luck(d):
+    """Good luck: a four-leaf clover - four solid heart leaves and a stem."""
+    import math
+    cx, cy = 248, 232
+    d.line([(cx, cy), (cx + 60, cy + 120), (cx + 120, cy + 190), (cx + 190, cy + 250)],
+           fill=0, width=30, joint="curve")                       # stem
+    for out in (-90, 0, 90, 180):                                  # up, right, down, left
+        a = math.radians(out)
+        hx, hy = cx + 100 * math.cos(a), cy + 100 * math.sin(a)
+        d.polygon(_heart_points(hx, hy, 6.0, out + 180), fill=0)  # point to the middle
+    for diag in (45, 135, 225, 315):                               # thin gaps between leaves
+        a = math.radians(diag)
+        d.line([(cx, cy), (cx + 200 * math.cos(a), cy + 200 * math.sin(a))], fill=255, width=16)
+    d.line([(cx + 40, cy + 40), (cx + 60, cy + 70)], fill=0, width=30)   # stem joins the leaves
 
 
 def _icon_house(d):
@@ -191,6 +275,7 @@ BUILTIN_ICONS = {
     "gift": _icon_gift, "birthday": _icon_birthday, "christmas": _icon_christmas,
     "celebration": _icon_celebration, "heart": _icon_heart, "star": _icon_star,
     "balloon": _icon_balloon, "wedding": _icon_wedding, "new home": _icon_house,
+    "get well": _icon_get_well, "good luck": _icon_good_luck,
 }
 
 

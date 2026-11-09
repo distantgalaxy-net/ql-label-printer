@@ -3,7 +3,7 @@
 Read this before changing the code. It explains what we're building, the decisions already made
 and the constraints that aren't obvious from the code.
 
-_Last updated: 2026-11-09 11:10 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Last updated: 2026-11-09 11:55 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 ---
 
@@ -270,6 +270,10 @@ image is valid for a model (it raises if the size is wrong).
   read into the flight boxes for checking, then added.
 - 2026-11-08 – Accent colour choice in Settings (green default; blue, red,
   pink, purple, orange, monochrome), each tuned for light and dark themes.
+- 2026-11-09 – Built-in icons: wedding redrawn as linked rings with a
+  diamond (two plain circles didn't read as anything); added get well
+  (sticking plaster) and good luck (four-leaf clover). Drawn in code like
+  the others, checked at label size (190 dots, black and white).
 - 2026-11-09 – Page checks the printer and disables Print with the reason
   (unavailable / cover open / spool finished / wrong roll). brother_ql's
   network backend can't read status, so status.py asks the printer
