@@ -1,6 +1,6 @@
 # ------------------------------------------------------------------
 # labelprinter - label layouts
-# Date: 2026-11-09 13:50 GMT (updated; first written 2026-11-07 18:10 GMT)
+# Date: 2026-11-09 14:10 GMT (updated; first written 2026-11-07 18:10 GMT)
 # Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
 #
 # Turns form data into a black-and-white image the exact width of the
@@ -361,28 +361,21 @@ def _icon_flowers(d):
 
 
 def _icon_snowman(d):
-    """Snowman: two snowballs, top hat, carrot nose sticking out, scarf, buttons, twig arms."""
-    cx = 256
-
-    def ball(y, r, width=LW):
-        """A snowball: white inside (hides what's behind it), black outline."""
-        d.ellipse((cx - r, y - r, cx + r, y + r), fill=255, outline=0, width=width)
-
+    """Snowman: round head on a tall oval body, thin outlines, simple face,
+    carrot nose, scarf, buttons and twig arms."""
+    cx, line = 256, 20                                   # centre line, outline width
     for side in (-1, 1):                                 # twig arms, behind the body
-        d.line([(cx + side * 100, 330), (cx + side * 214, 250)], fill=0, width=20)
-        d.line([(cx + side * 180, 274), (cx + side * 186, 226)], fill=0, width=14)
-    ball(364, 124)                                       # body
-    ball(164, 70, width=30)                              # head
-    d.rectangle((cx - 50, 18, cx + 50, 102), fill=0)     # top hat...
-    d.rounded_rectangle((cx - 82, 92, cx + 82, 116), radius=10, fill=0)   # ...its brim
-    d.rectangle((cx - 50, 76, cx + 50, 86), fill=255)    # ...and a white band
-    for x in (cx - 26, cx + 14):                         # eyes
-        d.ellipse((x - 11, 142, x + 11, 164), fill=0)
-    d.polygon([(cx + 8, 168), (cx + 8, 198), (cx + 110, 186)], fill=0)   # carrot nose
-    d.rounded_rectangle((cx - 82, 222, cx + 82, 254), radius=14, fill=0)   # scarf
-    d.polygon([(cx - 70, 240), (cx - 34, 240), (cx - 38, 326), (cx - 74, 322)], fill=0)   # scarf tail
-    for y in (300, 352, 404):                            # buttons
-        d.ellipse((cx - 13, y - 13, cx + 13, y + 13), fill=0)
+        d.line([(cx + side * 84, 300), (cx + side * 206, 222)], fill=0, width=16)
+        d.line([(cx + side * 170, 246), (cx + side * 178, 198)], fill=0, width=12)
+    d.ellipse((cx - 106, 178, cx + 106, 496), fill=255, outline=0, width=line)   # body: tall oval
+    d.ellipse((cx - 76, 30, cx + 76, 182), fill=255, outline=0, width=line)     # head
+    for x in (cx - 28, cx + 22):                         # eyes
+        d.ellipse((x - 11, 86, x + 11, 108), fill=0)
+    d.polygon([(cx - 2, 118), (cx - 2, 142), (cx + 72, 134)], fill=0)   # carrot nose
+    d.rounded_rectangle((cx - 78, 170, cx + 78, 198), radius=12, fill=0)    # scarf
+    d.polygon([(cx - 64, 186), (cx - 34, 186), (cx - 38, 262), (cx - 68, 258)], fill=0)   # scarf tail
+    for y in (270, 330, 390):                            # buttons
+        d.ellipse((cx - 12, y - 12, cx + 12, y + 12), fill=0)
 
 
 def _icon_snowflake(d):
