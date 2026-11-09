@@ -3,7 +3,7 @@
 Read this before changing the code. It explains what we're building, the decisions already made
 and the constraints that aren't obvious from the code.
 
-_Last updated: 2026-11-09 14:10 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Last updated: 2026-11-09 14:40 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 ---
 
@@ -278,7 +278,7 @@ image is valid for a model (it raises if the size is wrong).
   icons; clover stem now comes out of the bottom leaf. Then snowman and
   snowflake; snowman and celebration (party popper) later redrawn to be
   clearer and livelier; snowman then simplified (thin outlines, tall oval
-  body, no hat).
+  body, no hat). Fireworks added.
 - 2026-11-09 – Built-in icons: wedding redrawn as linked rings with a
   diamond (two plain circles didn't read as anything); added get well
   (sticking plaster) and good luck (four-leaf clover). Drawn in code like

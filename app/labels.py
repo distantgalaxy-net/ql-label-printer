@@ -1,6 +1,6 @@
 # ------------------------------------------------------------------
 # labelprinter - label layouts
-# Date: 2026-11-09 14:10 GMT (updated; first written 2026-11-07 18:10 GMT)
+# Date: 2026-11-09 14:40 GMT (updated; first written 2026-11-07 18:10 GMT)
 # Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
 #
 # Turns form data into a black-and-white image the exact width of the
@@ -395,6 +395,30 @@ def _icon_snowflake(d):
     d.ellipse((cx - 40, cy - 40, cx + 40, cy + 40), fill=0)       # centre
 
 
+def _burst(d, cx, cy, r, rays, width, dot):
+    """One firework burst: rays from near the centre, alternately long and short,
+    each ending in a dot."""
+    import math
+    for k in range(rays):
+        a = math.radians(k * 360 / rays - 90)
+        inner, outer = r * 0.30, (r if k % 2 == 0 else r * 0.78)
+        x2, y2 = cx + outer * math.cos(a), cy + outer * math.sin(a)
+        d.line([(cx + inner * math.cos(a), cy + inner * math.sin(a)), (x2, y2)], fill=0, width=width)
+        d.ellipse((x2 - dot, y2 - dot, x2 + dot, y2 + dot), fill=0)
+
+
+def _icon_fireworks(d):
+    """Fireworks: a big burst, two smaller ones, and a dashed rocket trail rising to the big one."""
+    _burst(d, 210, 200, 160, 16, 18, 14)                 # big burst
+    _burst(d, 410, 120, 80, 12, 12, 9)                   # small burst, top right
+    _burst(d, 420, 330, 62, 10, 11, 8)                   # smaller burst, right
+    x0, y0, x1, y1 = 150, 500, 196, 300                  # trail: bottom up towards the big burst
+    for t0 in (0.0, 0.3, 0.6):
+        t1 = t0 + 0.18
+        d.line([(x0 + (x1 - x0) * t0, y0 + (y1 - y0) * t0), (x0 + (x1 - x0) * t1, y0 + (y1 - y0) * t1)],
+               fill=0, width=14)
+
+
 def _icon_house(d):
     """New home: house outline with a door."""
     d.polygon([(256, 60), (50, 250), (462, 250)], outline=0, width=LW)
@@ -408,6 +432,7 @@ BUILTIN_ICONS = {
     "balloon": _icon_balloon, "wedding": _icon_wedding, "new home": _icon_house,
     "get well": _icon_get_well, "good luck": _icon_good_luck, "horseshoe": _icon_horseshoe,
     "flowers": _icon_flowers, "snowman": _icon_snowman, "snowflake": _icon_snowflake,
+    "fireworks": _icon_fireworks,
 }
 
 

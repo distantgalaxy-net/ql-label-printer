@@ -3,7 +3,7 @@
 Print useful labels on a Brother QL label printer from your phone or from
 Home Assistant.
 
-_Updated: 2026-11-09 13:50 GMT · Developer: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Updated: 2026-11-09 14:40 GMT · Developer: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 A small self-hosted web service, run in Docker (for example on a Synology
 NAS). It prints on a network-connected Brother QL printer from a
@@ -266,7 +266,7 @@ Settings → Secrets and variables → Actions.
 Built-in icons: gift, birthday, christmas, celebration, heart, star, balloon,
 wedding (linked rings with a diamond), new home, get well (sticking
 plaster), good luck (four-leaf clover), horseshoe, flowers (tulips), snowman,
-snowflake.
+snowflake, fireworks.
 
 Long names stay readable: if a name would have to shrink to fit beside
 the icon, it goes across the full width on top with the icon beside the
