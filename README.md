@@ -3,7 +3,7 @@
 Print useful labels on a Brother QL label printer from your phone or from
 Home Assistant.
 
-_Updated: 2026-11-08 23:30 GMT · Developer: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Updated: 2026-11-09 20:00 GMT · Developer: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 A small self-hosted web service, run in Docker (for example on a Synology
 NAS). It prints on a network-connected Brother QL printer from a
@@ -30,7 +30,8 @@ Home Assistant on the same host (optional)
 
 ## Label types
 
-Address (optional icon, including your own uploaded pictures) · Food
+Address (optional icon, including your own uploaded pictures; fill in
+from a contact card, or on Android straight from your contacts) · Food
 (freezer, fridge or cupboard: frozen/opened date, use-by in days or months,
 cooking instructions in °C or °F, notes, saved presets) · Travel (your
 saved details + flights, sorted and split into journeys, saved trips) ·
@@ -150,14 +151,68 @@ Then, if you like:
 - **Food tab:** fill in a food you make often and tap **Save as preset**.
   A preset keeps everything except the date: choosing it again fills in
   today's date and works out the use-by date afresh.
+- **Address tab → Import contact card** (any device) or **Choose from
+  contacts** (Android): fill in an address from your contacts. See
+  [Filling in addresses from contacts](#filling-in-addresses-from-contacts).
 - **Address tab → Your own icons:** upload a picture; it's converted to a
   black-and-white square. Delete it there too.
 
 The **Print** button sits directly under the label preview. Messages
 appear right next to the button you pressed.
 
+The page checks the printer when it opens, after printing, when you come
+back to it, and every minute while it's open (every 30 seconds while
+there's a problem). The printer is also checked just before every print
+(from the page or Home Assistant): if it reports a problem, nothing is
+sent and the reply says why (HTTP 409, e.g. *Not printed: Printer cover
+open*). If the printer can't print, **Print** is disabled
+with the reason – *Printer unavailable*, *Printer cover open*, *Label
+spool finished* or *Fit 62mm continuous label* – and a **Check again**
+button. When all is well it shows e.g. *Printer ready · 62mm continuous*,
+or *Printer connected* if the printer can be reached but won't report its
+status (then cover and roll problems can't be detected).
+Which of these your printer can report depends on the model: every
+printer can report *unavailable*; the roll and cover need the printer to
+answer status requests over the network (Settings → **Printer status →
+Check printer** shows what yours says). The QL-810W reports them over
+**SNMP**: in the printer's web settings (Network → Protocol → SNMP) keep a
+mode with *v1/v2c read-only access* (e.g. "SNMPv3 read-write access and
+v1/v2c read-only access"), and if a firewall sits between the host and
+the printer, allow **UDP port 161** to the printer as well as TCP 9100.
+
 Everything is saved in the `data/` folder (never in this repo or the
 published image), so it survives updates and is included in your backups.
+
+## Filling in addresses from contacts
+
+The Address tab can fill in a name and address from your contacts in two
+ways. Either way, only the contact you choose is used, it only fills in
+the form, and nothing is saved or uploaded.
+
+**Import contact card** – works on every device. A contact card is a
+`.vcf` (vCard) file:
+
+- **Google Contacts** (contacts.google.com): tick the contact(s) →
+  **Export** → **vCard**.
+- **Mac Contacts:** drag the contact to the desktop, or File → Export →
+  Export vCard.
+- **Outlook:** save or export the contact as a vCard.
+- **iPhone:** Contacts → open the contact → **Share Contact** → **Save to
+  Files**, then tap **Import contact card**.
+
+On a computer you can also drop the file onto the Address tab. A file can
+hold many contacts (e.g. a whole Google export): you'll get a list of
+names to choose from, with a search box for long lists. The file is read
+in your browser and never sent to the server.
+
+**Choose from contacts** – Android phones only (Chrome). Opens your
+phone's own contact list; pick a contact and its address is filled in.
+It needs an `https://` address: Android only allows the contact picker
+on secure pages. (iPhones can't do this: Safari's contact picker only
+shares names, emails and phone numbers – import a contact card instead.)
+
+If a contact has more than one address you're asked which one; there's
+never a default.
 
 ## Optional password
 
@@ -181,10 +236,16 @@ To turn it on, open **Settings → Password (optional)**, enter a new password
 Releases are listed on the GitHub **Releases** page. Your settings in
 `data/` are kept across updates.
 
-- **Synology:** Container Manager → **Project** → `ql-label-printer` →
-  **Action → Stop**, then **Action → Build**. That downloads the newest
-  image and starts it again. (Alternatively: **Image** →
-  `distantgalaxy/ql-label-printer` → **Update**, then restart the project.)
+- **Synology:** Container Manager doesn't download updates by itself, and
+  the "Update available" badge can take a long time to appear, so update
+  by hand once the release's GitHub build has finished:
+  1. **Registry** → search `distantgalaxy/ql-label-printer` → select it →
+     **Download** → tag `latest`. This fetches the new image (Build on its
+     own does not, if an older copy is already on the NAS).
+  2. **Project** → `ql-label-printer` → **Action → Stop**, then
+     **Action → Build**. This recreates the container from the new image;
+     a plain restart keeps using the old one.
+  3. Open the page to check it's the new version.
 - **Other hosts:**
   ```bash
   docker compose pull && docker compose up -d
@@ -197,8 +258,11 @@ Releases are listed on the GitHub **Releases** page. Your settings in
 The GitHub workflow `.github/workflows/docker-publish.yml` builds the image
 for amd64 and arm64 and pushes it to Docker Hub:
 
-- **Release:** GitHub → **Releases → Draft a new release**, create a tag
-  like `v1.0.0`, publish. The image is tagged `1.0.0`, `1.0` and `latest`.
+- **Release:** set `app/VERSION` to the new number (e.g. `1.2.0`) and merge
+  it, then GitHub → **Releases → Draft a new release**, create the tag
+  `v1.2.0`, publish. The image is tagged `1.2.0`, `1.2` and `latest`. The
+  workflow refuses to publish if the tag doesn't match `app/VERSION`.
+- **Which version is running:** shown at the top of the **Settings** tab.
 - **Test build:** **Actions → Publish Docker image → Run workflow** builds
   the chosen branch and tags it with the branch name (e.g. `main`), without
   touching `latest`.
@@ -210,15 +274,24 @@ Settings → Secrets and variables → Actions.
 ## Your own icons
 
 Built-in icons: gift, birthday, christmas, celebration, heart, star, balloon,
-wedding, new home. They're drawn by the app's own code (no image files or
+wedding (linked rings with a diamond), new home, get well (sticking
+plaster), good luck (four-leaf clover), horseshoe, flowers (tulips), snowman,
+snowflake, fireworks, sunshine, car.
+
+Long names stay readable: if a name would have to shrink to fit beside
+the icon, it goes across the full width on top with the icon beside the
+address, and a very long name is split over two lines. They're drawn by the app's own code (no image files or
 third-party artwork).
+
+The Icon list shows **None**, then **Your icons**, then **Built-in
+icons**, each in alphabetical order.
 
 To add your own, open **Address → Your own icons**, give it a name and
 choose a picture (PNG, JPEG, GIF, WebP or BMP, up to 10 MB). It's trimmed,
 fitted into a square and converted to pure black and white, then saved in
-`data/icons/`. Using a built-in's name (e.g. `gift`) replaces that built-in
-until you delete yours. You can also copy black-on-white PNGs into
-`data/icons/` directly.
+`data/icons/`. Names must be new: an upload with the same name as one of
+your icons or a built-in one is refused (delete yours first to replace
+it). You can also copy black-on-white PNGs into `data/icons/` directly.
 
 ## Troubleshooting
 
@@ -266,9 +339,10 @@ data:
 | Call | Purpose |
 |---|---|
 | `POST /api/preview/<type>` | PNG preview (header `X-Label-Length-mm`) |
-| `POST /api/print/<type>` | Print → `{"ok": true/false, "message": "…"}` (add `"copies": n`) |
+| `POST /api/print/<type>` | Print → `{"ok": true/false, "message": "…"}` (add `"copies": n`). Checks the printer first: if it reports a problem nothing is sent and the reply is HTTP 409 with the reason, plus the full status under `printer`. |
 | `GET/PUT /api/settings` | Saved details (`me`), `food_presets`, `trips`, battery types, `printer` (`host`, `port`, `model`), `timezone` (e.g. `Europe/London`), `temp_unit` (`C`/`F`), `accent` (`green`/`blue`/`red`/`pink`/`purple`/`orange`/`mono`); `password_set` is read-only |
 | `GET /api/options` | Printer models and time zone names |
+| `GET /api/printer/status` | Is the printer ready and which roll is loaded → `{"ok", "state", "message", "media", "source", "detail"}`; `state` is `ready`, `unavailable`, `cover_open`, `no_media`, `wrong_media` or `error`. Prints nothing. |
 | `POST /api/printer/test` | Check the printer can be reached without printing (body `host`/`port`, or empty to test the saved one) |
 | `GET /api/icons` | Icons: `[{"name", "custom"}]` |
 | `GET /api/icons/<name>` | Small PNG of an icon |
@@ -292,8 +366,8 @@ Fields:
 
 ## Ideas for later
 
-Address lookup from Google Contacts · guest Wi-Fi vouchers from UniFi as QR
-labels · picking network and battery devices from Home Assistant.
+Guest Wi-Fi vouchers from UniFi as QR labels · picking network and battery
+devices from Home Assistant.
 
 ## Licence
 

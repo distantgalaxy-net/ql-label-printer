@@ -1,6 +1,6 @@
 # ------------------------------------------------------------------
 # labelprinter - send a rendered label to a Brother QL printer
-# Date: 2026-11-08 21:55 GMT (updated; first written 2026-11-07 18:10 GMT)
+# Date: 2026-11-09 09:40 GMT (updated; first written 2026-11-07 18:10 GMT)
 # Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
 #
 # Uses brother_ql_next (a maintained fork of brother_ql) to turn an
@@ -43,6 +43,11 @@ _HOSTNAME = re.compile(r"^(?=.{1,253}$)([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9
 
 # Only one job talks to the printer at a time
 _lock = threading.Lock()
+
+
+def job_lock():
+    """The lock held while talking to the printer (status checks use it too)."""
+    return _lock
 
 
 def supported_models():

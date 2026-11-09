@@ -1,7 +1,7 @@
 <!doctype html>
 <!--
   labelprinter - label printing page (phone-first)
-  Date: 2026-11-08 23:20 GMT (updated; first written 2026-11-07 18:15 GMT)
+  Date: 2026-11-09 19:40 GMT (updated; first written 2026-11-07 18:15 GMT)
   Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
   One form per label type; the preview updates as you type, then Print.
   The Settings tab holds the printer (model, IP address, port), the time
@@ -11,10 +11,22 @@
   Settings tab works.
   The Print button sits directly under the label preview, and messages
   appear right next to the button that was pressed, so they can't be missed.
+  The printer is checked when the page opens, after printing, when the
+  page comes back into view, and regularly while it's on screen (every
+  minute when ready, every 30 seconds while there's a problem): Print is
+  disabled with a message such as "Printer cover open" until it's ready.
   An optional password (Settings tab) protects the page; if one is set and
   the login has expired, any API call answers 401 and we go to /login.
   Everything saved (presets, details, trips, icons) lives on the server in
   /data - never in this repo or the Docker image.
+  Address tab: two ways to fill in an address from contacts.
+   - "Choose from contacts": the browser's Contact Picker. Only Chrome on
+     Android can share addresses this way, and only on an https:// page
+     (Safari's picker gives names, emails and phone numbers, not addresses).
+   - "Import contact card": a .vcf file (vCard) exported from any contacts
+     app, on any device; on computers it can also be dropped on the tab.
+     The file is read in the browser and never uploaded.
+  Either way the contact is only used to fill in the form - nothing is saved.
 -->
 <html lang="en-GB">
 <head>
@@ -104,13 +116,23 @@
   .list li { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--field); }
   .list li .grow { flex: 1; min-width: 0; overflow-wrap: anywhere; }
   .list li.break { border: 0; background: none; padding: 0 8px; color: var(--muted); font-size: .8rem; }
+  .addrtext { white-space: pre-line; text-align: left; }
+  .addrtext b { display: block; font-size: .8rem; color: var(--muted); font-weight: 600; }
+  form.dropping { outline: 2px dashed var(--accent); outline-offset: 6px; border-radius: 8px; }
   .legtext { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: .85rem; }
   .summary { margin: 0; white-space: pre-line; color: var(--fg); }
   .printrow { display: flex; gap: 10px; align-items: center; }
   .printrow input { width: 70px; text-align: center; }
   .printrow button { flex: 1; font: inherit; font-weight: 600; border: 0; border-radius: 10px; padding: 12px;
     background: var(--accent); color: var(--accent-fg); cursor: pointer; }
-  .printrow button:disabled { opacity: .55; }
+  .printrow button:disabled { opacity: .55; cursor: not-allowed; }
+  /* Printer state under the Print button: quiet when ready, red when not */
+  .pstate { display: flex; align-items: center; gap: 10px; font-size: .88rem; color: var(--muted); margin: 0; }
+  .pstate .grow { flex: 1; }
+  .pstate.bad { color: var(--bad); background: var(--bad-bg); border: 1px solid var(--bad); border-radius: 8px; padding: 8px 10px; font-size: .92rem; }
+  .pstate.bad .grow::before { content: "⚠ "; font-weight: 700; }
+  pre.detail { margin: 0; padding: 10px; border-radius: 8px; background: var(--field); border: 1px solid var(--line);
+    font-size: .75rem; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 260px; overflow: auto; }
   [hidden] { display: none !important; }
   button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 </style>
@@ -137,11 +159,39 @@
       <button id="print" type="button">Print</button>
     </div>
     <p class="msg" id="msg-print" role="status"></p>
+    <!-- Printer state: "Printer ready · 62mm continuous", or the problem -->
+    <div class="pstate" id="pstate" role="status" hidden>
+      <span class="grow" id="pstate-text"></span>
+      <button type="button" class="btn2 mini" id="pstate-retry" hidden>Check again</button>
+    </div>
   </div>
 
   <div class="card">
     <!-- Address -->
     <form data-kind="address" hidden>
+      <!-- Contacts: the picker button only shows where it can share
+           addresses (Chrome on Android over HTTPS); importing a contact
+           card works everywhere -->
+      <div class="actions">
+        <button type="button" class="btn2 primary" id="c-pick" hidden>Choose from contacts</button>
+        <button type="button" class="btn2" id="c-import">Import contact card</button>
+        <input type="file" id="c-file" accept=".vcf,text/vcard,text/x-vcard" hidden>
+      </div>
+      <p class="small" id="c-note" hidden></p>
+      <!-- Shown when a contact card file holds more than one contact -->
+      <div class="group" id="c-people" hidden>
+        <h3 id="c-people-title">Which contact?</h3>
+        <input id="c-search" type="search" placeholder="Search names" autocomplete="off" hidden>
+        <ul class="list" id="c-names"></ul>
+        <div class="actions"><button type="button" class="btn2" id="c-people-cancel">Cancel</button></div>
+      </div>
+      <!-- Shown when the chosen contact has more than one address -->
+      <div class="group" id="c-choose" hidden>
+        <h3 id="c-choose-title">Which address?</h3>
+        <ul class="list" id="c-addresses"></ul>
+        <div class="actions"><button type="button" class="btn2" id="c-cancel">Cancel</button></div>
+      </div>
+      <p class="msg" id="msg-contacts" role="status"></p>
       <label>Name<input id="a-name" name="name" autocomplete="off" placeholder="Alex Example"></label>
       <label>Address (one line per row)<textarea id="a-address" name="address" placeholder="1 High Street&#10;Anytown&#10;AB1 2CD"></textarea></label>
       <div class="iconpick">
@@ -305,6 +355,7 @@
 
     <!-- Settings: not a label, so the preview and Print button are hidden on this tab -->
     <form data-kind="settings" hidden>
+      <p class="small" id="s-version">Version …</p>
       <p class="info" id="s-welcome" hidden><strong>Welcome!</strong> Set up your printer to get started. Tap <strong>Test and save</strong>: it checks it can reach the printer, then unlocks the label tabs.</p>
       <h2>Printer</h2>
       <p class="small">Where to send labels. The printer needs a fixed IP address (set a DHCP reservation in your router) and must accept raw printing on the port below. Only the 62mm continuous roll (DK-22205) is supported.</p>
@@ -323,6 +374,12 @@
         <button type="button" class="btn2 primary" id="s-save">Test and save</button>
       </div>
       <p class="msg" id="msg-settings" role="status"></p>
+
+      <h2>Printer status</h2>
+      <p class="small">Asks the printer whether it's ready and which roll is loaded (nothing is printed). The details show exactly what the printer replied.</p>
+      <div class="actions"><button type="button" class="btn2" id="s-status">Check printer</button></div>
+      <p class="msg" id="msg-status" role="status"></p>
+      <pre class="detail" id="s-status-detail" hidden></pre>
 
       <h2>Temperature unit</h2>
       <p class="small">Used for cooking temperatures on food labels. Saved straight away.</p>
@@ -499,14 +556,89 @@ document.querySelectorAll("form").forEach(f => {
 
 // ---- print -------------------------------------------------------
 // The result is shown right under the Print button
+let printing = false;
 $("print").addEventListener("click", async () => {
   const btn = $("print");
-  btn.disabled = true; btn.textContent = "Printing…"; say("msg-print", "");
+  printing = true; showPrintButton(); btn.textContent = "Printing…"; say("msg-print", "");
   const body = Object.assign(formData(kind), { copies: $("copies").value || 1 });
   const res = await api("POST", `/api/print/${kind}`, body);
   // The server's message: "Label sent to printer" or what went wrong
   say("msg-print", res.body.message || (res.ok ? "Label sent to printer" : "Printing failed"), res.ok ? "ok" : "bad");
-  btn.disabled = false; btn.textContent = "Print";
+  printing = false; btn.textContent = "Print"; showPrintButton();
+  // The server checks the printer before sending; if it refused because of
+  // the printer's state, show that state now (Print greys out with the reason)
+  if (res.body.printer && res.body.printer.state) {
+    say("msg-print", "");          // the printer state box below says why, once
+    printerState = res.body.printer; showPrinterState();
+    clearTimeout(printerTimer);
+    printerTimer = setTimeout(() => { if (!document.hidden) checkPrinter(); }, 30000);
+  } else {
+    // Look again once the printer has had a moment (e.g. the roll may have
+    // just run out); straight away if the print failed for another reason
+    setTimeout(checkPrinter, res.ok ? 4000 : 0);
+  }
+});
+
+// ---- printer state ----------------------------------------------------
+// printerState: null while unknown/checking, else the reply from
+// /api/printer/status ({ok, state, message, media, source, detail}).
+let printerState = null, printerChecking = false, printerTimer = null;
+// Print is allowed once the printer has said it's ready (and not mid-print)
+function showPrintButton() { $("print").disabled = printing || !(printerState && printerState.ok); }
+// Show the state line under Print: quiet when ready, red with "Check again" when not
+function showPrinterState() {
+  const box = $("pstate"), text = $("pstate-text");
+  box.hidden = false;
+  if (printerChecking && !printerState) { box.className = "pstate"; text.textContent = "Checking printer…"; $("pstate-retry").hidden = true; }
+  else if (printerState && printerState.ok) {
+    box.className = "pstate";
+    // "Printer ready · 62mm continuous", or "Printer connected" when the
+    // printer won't say more than that it's reachable
+    const msg = printerState.message || "Printer ready";
+    text.textContent = printerState.media ? `${msg} · ${printerState.media}` : msg;
+    $("pstate-retry").hidden = true;
+  } else if (printerState) {
+    box.className = "pstate bad";
+    // For the wrong roll, say which roll the printer found
+    text.textContent = (printerState.message || "Printer unavailable") +
+      (printerState.state === "wrong_media" && printerState.media ? ` · ${printerState.media} loaded` : "");
+    $("pstate-retry").hidden = false;
+    $("pstate-retry").textContent = printerChecking ? "Checking…" : "Check again";
+  }
+  $("pstate-retry").disabled = printerChecking;
+  showPrintButton();
+}
+// Ask the server to check the printer, then check again regularly while
+// the page is on screen: every minute while all is well (a heartbeat, so a
+// printer switched off or a cover opened is noticed), every 30 seconds
+// while there's a problem (so it clears itself once fixed). Hidden pages
+// (another tab, phone locked) don't check; they check on coming back.
+async function checkPrinter() {
+  if (locked || printerChecking) return;
+  clearTimeout(printerTimer);
+  printerChecking = true; showPrinterState();
+  const res = await api("GET", "/api/printer/status");
+  printerChecking = false;
+  printerState = res.body && res.body.state ? res.body
+    : { ok: false, state: "unavailable", message: res.body.message || "Can't reach the label service" };
+  showPrinterState();
+  printerTimer = setTimeout(() => { if (!document.hidden) checkPrinter(); }, printerState.ok ? 60000 : 30000);
+}
+$("pstate-retry").addEventListener("click", checkPrinter);
+// Phones keep pages open for a long time: check again when it comes back into view
+document.addEventListener("visibilitychange", () => { if (!document.hidden) checkPrinter(); });
+
+// Settings tab: "Check printer" shows the result and exactly what the printer said
+$("s-status").addEventListener("click", async () => {
+  const btn = $("s-status"); btn.disabled = true; btn.textContent = "Checking…";
+  const res = await api("GET", "/api/printer/status");
+  btn.disabled = false; btn.textContent = "Check printer";
+  const r = res.body || {};
+  if (r.state) { printerState = r; showPrinterState(); }
+  const how = { printer: "the printer's status reply", snmp: "SNMP", connection: "a connection test only", settings: "settings" }[r.source] || "unknown";
+  say("msg-status", `${r.message || "No answer"}${r.media ? ` · ${r.media}` : ""} (from ${how})`, r.ok ? "ok" : "bad");
+  $("s-status-detail").textContent = JSON.stringify(r.detail || {}, null, 2);
+  $("s-status-detail").hidden = false;
 });
 
 // ---- saving settings -------------------------------------------------
@@ -521,14 +653,280 @@ async function saveSettings(patch) {
   return "";
 }
 
+// ---- Address tab: contacts ------------------------------------------------
+// Two ways in, both ending at the same address chooser:
+//  1. "Choose from contacts" - the browser's Contact Picker API. Only Chrome
+//     on Android shares addresses (Safari's picker only gives names, emails
+//     and phone numbers), and only on a secure (https://) page.
+//  2. "Import contact card" - a .vcf (vCard) file from any contacts app,
+//     read here in the browser and never uploaded. Computers can also drop
+//     the file onto the Address tab.
+// Nothing about the contact is saved; it only fills in the form.
+
+// "android", "ios" or "computer", from what the browser reports. iPads
+// claim to be Macs, so a "Mac" with a touch screen counts as iOS.
+function deviceKind() {
+  const ua = navigator.userAgent || "";
+  if (/Android/i.test(ua)) return "android";
+  if (/iPhone|iPad|iPod/i.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) return "ios";
+  return "computer";
+}
+// True when this browser can open a contact picker that returns addresses
+async function canPickAddresses() {
+  if (!("contacts" in navigator) || !("ContactsManager" in window) || !window.isSecureContext) return false;
+  try { return (await navigator.contacts.getProperties()).includes("address"); }
+  catch (e) { return false; }
+}
+// Show the picker button where it works, and a short note for the device:
+//   Android, not secure       -> the picker needs a secure connection
+//   Android, secure, no picker -> the picker needs Chrome
+//   iPhone / iPad             -> how to save a contact card to import
+//   computer                  -> how to export a contact card to import
+async function setUpContacts() {
+  const ok = await canPickAddresses(), device = deviceKind(), note = $("c-note");
+  $("c-pick").hidden = !ok;
+  let text = "";
+  if (device === "android" && !window.isSecureContext) text = "Contact picker only available via a secure connection.";
+  else if (device === "android" && !ok) text = "Contact picker only available in Chrome on Android.";
+  else if (device === "ios") text = "To import a contact: in Contacts, open the contact, tap Share Contact, then Save to Files. Then tap Import contact card.";
+  else if (device === "computer") text = "Export a contact as a vCard (.vcf) from Google Contacts, Outlook or the Mac Contacts app, then import it or drop the file here.";
+  note.textContent = text;
+  note.hidden = !text;
+}
+// Turn one address into label lines: street lines first, then locality,
+// town, county/region, postcode and country, skipping blanks and repeats.
+// Some phones put the whole address in the street field (we can tell
+// because the postcode is already in it): then it's split at commas and
+// new lines, and the separate town/postcode fields are only added if they
+// aren't in it already. Otherwise street lines are kept as they are
+// ("Flat 4, 22 Mill Lane" stays one line).
+function contactAddressLines(a) {
+  const street = (a.addressLine || []).map(l => String(l || "").trim()).filter(Boolean);
+  const streetText = street.join("\n").toLowerCase();
+  const postcode = String(a.postalCode || "").trim().toLowerCase();
+  const whole = Boolean(postcode) && streetText.includes(postcode);
+  const lines = [];
+  const add = (v) => {
+    v = String(v || "").trim();
+    if (v && !lines.some(l => l.toLowerCase() === v.toLowerCase())) lines.push(v);
+  };
+  street.forEach(l => l.split(whole ? /\r?\n|,\s*/ : /\r?\n/).forEach(add));
+  [a.dependentLocality, a.city, a.region, a.postalCode, a.country].forEach(v => {
+    if (whole && streetText.includes(String(v || "").trim().toLowerCase())) return;   // already there
+    add(v);
+  });
+  return lines;
+}
+// Turn a contact's addresses into choices [{label, lines}], dropping empty
+// and duplicate ones. label is e.g. "Home" or "Work" (blank if unknown).
+function addressChoices(addresses) {
+  const seen = new Set(), out = [];
+  (addresses || []).forEach(a => {
+    const lines = contactAddressLines(a), key = lines.join("|").toLowerCase();
+    if (lines.length && !seen.has(key)) { seen.add(key); out.push({ label: a.label || "", lines }); }
+  });
+  return out;
+}
+// Fill the form with a name and one address, then refresh the preview
+function useContact(name, lines) {
+  if (name) $("a-name").value = name;
+  $("a-address").value = lines.join("\n");
+  $("c-choose").hidden = true; $("c-people").hidden = true;
+  schedulePreview(0);
+}
+// Fill in the address straight away if there's one, or list them all and
+// let the user choose (there's never a default)
+function offerAddresses(name, choices) {
+  $("c-choose").hidden = true;
+  if (!choices.length) {
+    if (name) $("a-name").value = name;
+    schedulePreview(0);
+    say("msg-contacts", `${name || "That contact"} has no address saved. Type it in below.`, "bad");
+    return;
+  }
+  if (choices.length === 1) {
+    useContact(name, choices[0].lines);
+    say("msg-contacts", `Filled in ${name || "the contact"}'s address – check it below`, "ok");
+    return;
+  }
+  const list = $("c-addresses"); list.textContent = "";
+  $("c-choose-title").textContent = `${name || "This contact"} has ${choices.length} addresses. Which one?`;
+  choices.forEach(c => {
+    const li = document.createElement("li");
+    const text = document.createElement("span"); text.className = "grow addrtext";
+    if (c.label) { const b = document.createElement("b"); b.textContent = c.label; text.append(b); }
+    text.append(c.lines.join("\n"));
+    const use = document.createElement("button"); use.type = "button"; use.className = "btn2 primary mini"; use.textContent = "Use this";
+    use.addEventListener("click", () => {
+      useContact(name, c.lines);
+      say("msg-contacts", "Filled in the address you chose – check it below", "ok");
+    });
+    li.append(text, use); list.append(li);
+  });
+  $("c-choose").hidden = false;
+  $("c-choose").scrollIntoView({ block: "nearest", behavior: "smooth" });
+}
+$("c-cancel").addEventListener("click", () => { $("c-choose").hidden = true; });
+
+// 1. The phone's contact picker (Chrome on Android)
+$("c-pick").addEventListener("click", async () => {
+  say("msg-contacts", ""); $("c-choose").hidden = true; $("c-people").hidden = true;
+  let picked;
+  try { picked = await navigator.contacts.select(["name", "address"], { multiple: false }); }
+  catch (e) { say("msg-contacts", "Couldn't open your contacts. Check Chrome is allowed to read them.", "bad"); return; }
+  if (!picked || !picked.length) return;                 // closed without choosing
+  const c = picked[0];
+  offerAddresses((c.name || []).find(n => n && n.trim()) || "", addressChoices(c.address));
+});
+
+// 2. Contact card files (vCard 2.1, 3.0 and 4.0)
+// Undo vCard escaping: \n new line, \, comma, \; semicolon, \\ backslash
+const vUnescape = (v) => v.replace(/\\([nN,;\\])/g, (_, c) => (c === "n" || c === "N") ? "\n" : c);
+// Split a structured value (e.g. ADR) at semicolons that aren't escaped
+const vSplit = (v) => v.split(/(?<!\\);/).map(vUnescape);
+// Decode a QUOTED-PRINTABLE value (older vCard 2.1 files, e.g. from Outlook)
+function vQuotedPrintable(v, charset) {
+  const bytes = [];
+  for (let i = 0; i < v.length; i++) {
+    if (v[i] === "=" && /^[0-9A-F]{2}$/i.test(v.substr(i + 1, 2))) { bytes.push(parseInt(v.substr(i + 1, 2), 16)); i += 2; }
+    else bytes.push(v.charCodeAt(i) & 255);
+  }
+  try { return new TextDecoder(charset || "utf-8").decode(new Uint8Array(bytes)); }
+  catch (e) { return new TextDecoder("utf-8").decode(new Uint8Array(bytes)); }
+}
+// Words used as address types that aren't worth showing as a label
+const ADR_TYPES_IGNORED = new Set(["pref", "intl", "dom", "postal", "parcel", "internet", "voice"]);
+// Read every contact in a vCard file: [{name, addresses: [{label, addressLine, city, ...}]}]
+function parseVCards(text) {
+  // Join folded lines (a line starting with a space or tab continues the
+  // one before) and quoted-printable soft line breaks (a line ending "=")
+  const lines = [];
+  for (const line of text.replace(/\r\n?/g, "\n").split("\n")) {
+    const last = lines.length - 1;
+    if (last >= 0 && /^[ \t]/.test(line)) lines[last] += line.slice(1);
+    else if (last >= 0 && /QUOTED-PRINTABLE/i.test(lines[last].split(":")[0]) && lines[last].endsWith("=")) lines[last] = lines[last].slice(0, -1) + line;
+    else lines.push(line);
+  }
+  const cards = [];
+  let card = null;
+  for (const line of lines) {
+    if (/^BEGIN:VCARD/i.test(line)) { card = { fn: "", n: "", adrs: [], labels: {} }; continue; }
+    if (/^END:VCARD/i.test(line)) { if (card) cards.push(card); card = null; continue; }
+    if (!card) continue;
+    // [group.]NAME[;param;param...]:value
+    const m = line.match(/^(?:([^.:;]+)\.)?([A-Za-z0-9-]+)((?:;[^:]*)?):(.*)$/);
+    if (!m) continue;
+    const group = (m[1] || "").toLowerCase(), prop = m[2].toUpperCase();
+    const params = m[3].split(";").filter(Boolean);
+    let value = m[4];
+    if (params.some(p => /QUOTED-PRINTABLE/i.test(p))) {
+      const cs = (params.find(p => /^CHARSET=/i.test(p)) || "").split("=")[1];
+      value = vQuotedPrintable(value, cs);
+    }
+    if (prop === "FN") card.fn = vUnescape(value).trim();
+    else if (prop === "N") {
+      // family;given;additional;prefix;suffix -> "prefix given additional family suffix"
+      const [family = "", given = "", extra = "", prefix = "", suffix = ""] = vSplit(value);
+      card.n = [prefix, given, extra, family, suffix].map(x => x.trim()).filter(Boolean).join(" ");
+    } else if (prop === "ADR") {
+      // PO box;extended (flat/suite);street;town;region;postcode;country
+      const [pobox = "", ext = "", street = "", city = "", region = "", postalCode = "", country = ""] = vSplit(value);
+      const types = params.flatMap(p => p.replace(/^TYPE=/i, "").replace(/"/g, "").split(","))
+                          .map(t => t.toLowerCase()).filter(t => t && !t.includes("=") && !ADR_TYPES_IGNORED.has(t));
+      card.adrs.push({ group, type: types[0] || "", addressLine: [pobox, ext, ...street.split("\n")],
+                       city, region, postalCode, country });
+    } else if (prop === "X-ABLABEL" && group) {
+      card.labels[group] = vUnescape(value).replace(/^_\$!<(.*)>!\$_$/, "$1");   // Apple: _$!<Home>!$_
+    }
+  }
+  // Tidy: a name for each card, and a readable label for each address
+  const titled = (t) => t ? t.charAt(0).toUpperCase() + t.slice(1) : "";
+  return cards.map(c => ({
+    name: c.fn || c.n,
+    addresses: c.adrs.map(a => ({ ...a, label: titled(c.labels[a.group] || a.type) })),
+  }));
+}
+// Read a chosen or dropped file and offer its contacts
+async function importContactFile(file) {
+  say("msg-contacts", ""); $("c-choose").hidden = true; $("c-people").hidden = true;
+  if (!file) return;
+  if (file.size > 25 * 1024 * 1024) { say("msg-contacts", "That file is too big for a contact card (25 MB at most).", "bad"); return; }
+  let text = "";
+  try { text = await file.text(); } catch (e) { say("msg-contacts", "Couldn't read that file.", "bad"); return; }
+  if (!/BEGIN:VCARD/i.test(text)) { say("msg-contacts", "That isn't a contact card. Use a .vcf (vCard) file.", "bad"); return; }
+  const people = parseVCards(text)
+    .map(p => ({ name: p.name, choices: addressChoices(p.addresses) }))
+    .filter(p => p.choices.length)
+    .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+  if (!people.length) { say("msg-contacts", "None of the contacts in that file has an address saved.", "bad"); return; }
+  if (people.length === 1) { offerAddresses(people[0].name, people[0].choices); return; }
+  showPeople(people);
+}
+// Several contacts in one file: list their names (with a search box for
+// long lists) and continue with the one chosen
+let importedPeople = [];
+function showPeople(people) {
+  importedPeople = people;
+  $("c-people-title").textContent = `${people.length} contacts with addresses. Which one?`;
+  $("c-search").value = ""; $("c-search").hidden = people.length <= 8;
+  listPeople("");
+  $("c-people").hidden = false;
+  $("c-people").scrollIntoView({ block: "nearest", behavior: "smooth" });
+}
+// Show the names matching the search (at most 50 at a time)
+function listPeople(filter) {
+  const list = $("c-names"); list.textContent = "";
+  const f = filter.trim().toLowerCase();
+  const matches = importedPeople.filter(p => !f || (p.name || "").toLowerCase().includes(f));
+  matches.slice(0, 50).forEach(p => {
+    const li = document.createElement("li");
+    const name = document.createElement("span"); name.className = "grow";
+    name.textContent = `${p.name || "(no name)"}${p.choices.length > 1 ? ` · ${p.choices.length} addresses` : ""}`;
+    const pick = document.createElement("button"); pick.type = "button"; pick.className = "btn2 primary mini"; pick.textContent = "Choose";
+    pick.addEventListener("click", () => { $("c-people").hidden = true; offerAddresses(p.name, p.choices); });
+    li.append(name, pick); list.append(li);
+  });
+  if (matches.length > 50) {
+    const li = document.createElement("li"); li.className = "break";
+    li.textContent = `…and ${matches.length - 50} more – type to narrow the list`; list.append(li);
+  }
+  if (!matches.length) { const li = document.createElement("li"); li.className = "break"; li.textContent = "No names match"; list.append(li); }
+}
+$("c-search").addEventListener("input", e => listPeople(e.target.value));
+$("c-people-cancel").addEventListener("click", () => { $("c-people").hidden = true; });
+$("c-import").addEventListener("click", () => $("c-file").click());
+$("c-file").addEventListener("change", e => { importContactFile(e.target.files[0]); e.target.value = ""; });
+// Computers: drop a contact card anywhere on the Address tab
+(() => {
+  const form = document.querySelector('form[data-kind="address"]');
+  // Files dragged anywhere except the icon upload area (pictures go there)
+  const hasFiles = (e) => [...(e.dataTransfer?.types || [])].includes("Files") && !e.target.closest("#i-manage");
+  form.addEventListener("dragover", e => { if (hasFiles(e)) { e.preventDefault(); form.classList.add("dropping"); } });
+  form.addEventListener("dragleave", e => { if (!form.contains(e.relatedTarget)) form.classList.remove("dropping"); });
+  form.addEventListener("drop", e => {
+    if (!hasFiles(e)) return;
+    e.preventDefault(); form.classList.remove("dropping");
+    importContactFile(e.dataTransfer.files[0]);
+  });
+})();
+
 // ---- Address tab: icons -----------------------------------------------
 const titleCase = (n) => n.charAt(0).toUpperCase() + n.slice(1);
 const iconUrl = (n) => `/api/icons/${encodeURIComponent(n)}?v=${Date.now()}`;
 // Fill the Icon dropdown and the "Your own icons" list from `icons`
+// Dropdown order: None, then "Your icons", then "Built-in icons", each
+// group alphabetical (the server sends them in that order)
 function fillIcons(select) {
   const sel = $("a-icon"), keep = select ?? sel.value;
-  sel.length = 1;
-  icons.forEach(i => sel.add(new Option(titleCase(i.name) + (i.custom ? " (yours)" : ""), i.name)));
+  sel.textContent = "";
+  sel.add(new Option("None", "none"));
+  for (const [label, custom] of [["Your icons", true], ["Built-in icons", false]]) {
+    const group = icons.filter(i => i.custom === custom);
+    if (!group.length) continue;
+    const og = document.createElement("optgroup"); og.label = label;
+    group.forEach(i => og.append(new Option(titleCase(i.name), i.name)));
+    sel.append(og);
+  }
   sel.value = icons.some(i => i.name === keep) ? keep : "none";
   showIconThumb();
   const list = $("i-list"); list.textContent = "";
@@ -560,7 +958,12 @@ $("i-upload").addEventListener("click", async () => {
   const file = $("i-file").files[0], name = $("i-name").value.trim();
   if (!file) { say("msg-icons", "Choose a picture first", "bad"); return; }
   if (!name) { say("msg-icons", "Give the icon a name", "bad"); return; }
-  if (icons.some(i => i.name === name.toLowerCase() && i.custom) && !confirm(`Replace your icon “${name}”?`)) return;
+  // Names must be new (the server checks too, and says why)
+  const taken = icons.find(i => i.name === name.trim().toLowerCase().replace(/\s+/g, " "));
+  if (taken) {
+    say("msg-icons", `There's already ${taken.custom ? "one of your icons" : "a built-in icon"} called “${name.trim()}”. Choose another name${taken.custom ? ", or delete yours first" : ""}.`, "bad");
+    return;
+  }
   const btn = $("i-upload"); btn.disabled = true; btn.textContent = "Uploading…";
   const fd = new FormData(); fd.append("name", name); fd.append("file", file);
   let j = {};
@@ -898,6 +1301,7 @@ $("s-save").addEventListener("click", async () => {
   if (err) { say("msg-settings", err, "bad"); return; }
   $("f-date").value = today(); $("b-changed").value = today();
   setLocked(!isSetUp());
+  checkPrinter();
   say("msg-settings", firstTime && !locked
     ? "Printer connected and settings saved. The label tabs are unlocked – choose one at the top."
     : "Printer connected and settings saved", "ok");
@@ -972,8 +1376,11 @@ async function init() {
   try { opts = await (await fetch("/api/options")).json(); } catch (e) {}
   (opts.models || []).forEach(m => $("s-model").add(new Option(`${m.id}${m.min_length_mm > 13 ? ` (labels at least ${Math.round(m.min_length_mm)}mm)` : ""}`, m.id)));
   (opts.timezones || []).forEach(z => $("s-tz").add(new Option(z.replace(/_/g, " "), z)));
+  // Which build is running, so test copies are easy to tell apart
+  $("s-version").textContent = `LabelPrinter version ${opts.version || "unknown"}`;
   try { icons = await (await fetch("/api/icons")).json(); } catch (e) { icons = []; }
   fillIcons("none");
+  setUpContacts();
   fillPresets();
   fillTrips();
   (settings.battery_types || []).forEach(t => $("b-types").append(new Option(t)));
@@ -1006,6 +1413,7 @@ async function init() {
   setLocked(!isSetUp());
   if (locked) start = "settings";
   showTab(start);
+  checkPrinter();
 }
 init();
 </script>

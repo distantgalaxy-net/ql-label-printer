@@ -1,6 +1,6 @@
 # ------------------------------------------------------------------
 # labelprinter - label layouts
-# Date: 2026-11-08 22:40 GMT (updated; first written 2026-11-07 18:10 GMT)
+# Date: 2026-11-09 19:40 GMT (updated; first written 2026-11-07 18:10 GMT)
 # Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
 #
 # Turns form data into a black-and-white image the exact width of the
@@ -127,13 +127,46 @@ def _icon_christmas(d):
     _star(d, 256, 70, 58, 24, fill=0)
 
 
+def _wavy(x, y, length, angle, amp=16, waves=2.0):
+    """Points along a wavy streamer starting at (x, y), heading at an angle (degrees)."""
+    import math
+    a = math.radians(angle)
+    ux, uy = math.cos(a), math.sin(a)
+    pts = []
+    for i in range(41):
+        t = i / 40
+        off = amp * math.sin(t * waves * 2 * math.pi)
+        pts.append((x + ux * length * t - uy * off, y + uy * length * t + ux * off))
+    return pts
+
+
 def _icon_celebration(d):
-    """Party popper: cone with streamers and confetti."""
-    d.polygon([(50, 470), (150, 190), (330, 370)], outline=0, width=LW)   # cone
-    d.line([(250, 240), (300, 170), (270, 110), (330, 50)], fill=0, width=LW, joint="curve")
-    d.line([(300, 300), (380, 270), (420, 320), (480, 290)], fill=0, width=LW, joint="curve")
-    for cx, cy in ((200, 80), (410, 120), (460, 200), (380, 420), (120, 120)):
-        d.rectangle((cx - 20, cy - 20, cx + 20, cy + 20), fill=0)        # confetti
+    """Party popper: striped cone bursting with curly streamers, stars and confetti."""
+    import math
+    tip, mouth = (52, 464), (196, 320)                   # cone point, middle of its mouth
+    half = 74                                            # half the mouth's width
+    ang = math.atan2(mouth[1] - tip[1], mouth[0] - tip[0])
+    px, py = -math.sin(ang), math.cos(ang)
+    m1 = (mouth[0] + px * half, mouth[1] + py * half)
+    m2 = (mouth[0] - px * half, mouth[1] - py * half)
+    d.polygon([tip, m1, m2], fill=0)
+    for t in (0.42, 0.68):                               # white stripes across the cone
+        a1 = (tip[0] + (m1[0] - tip[0]) * t, tip[1] + (m1[1] - tip[1]) * t)
+        a2 = (tip[0] + (m2[0] - tip[0]) * t, tip[1] + (m2[1] - tip[1]) * t)
+        d.line([a1, a2], fill=255, width=14)
+    for x, y, length, angle, amp, waves in ((214, 290, 210, -62, 18, 2.0),     # streamers
+                                            (230, 304, 230, -22, 18, 2.0),
+                                            (226, 340, 200, 18, 16, 1.5)):
+        d.line(_wavy(x, y, length, angle, amp, waves), fill=0, width=18, joint="curve")
+    _star(d, 330, 70, 44, 19, fill=0)                    # stars
+    _star(d, 466, 250, 38, 16, fill=0)
+    _star(d, 130, 150, 34, 15, fill=0)
+    for x, y, r in ((410, 120, 13), (250, 140, 11), (470, 400, 12), (360, 460, 10)):
+        d.ellipse((x - r, y - r, x + r, y + r), fill=0)  # round confetti
+    for x, y, turn in ((180, 70, 30), (440, 330, -20), (300, 420, 50)):
+        a = math.radians(turn)                           # small tilted strips of confetti
+        d.polygon([(x + cx * math.cos(a) - cy * math.sin(a), y + cx * math.sin(a) + cy * math.cos(a))
+                   for cx, cy in ((-16, -8), (16, -8), (16, 8), (-16, 8))], fill=0)
 
 
 def _icon_heart(d):
@@ -175,9 +208,285 @@ def _icon_balloon(d):
 
 
 def _icon_wedding(d):
-    """Two interlocking rings."""
-    d.ellipse((60, 160, 300, 400), outline=0, width=LW)
-    d.ellipse((212, 160, 452, 400), outline=0, width=LW)
+    """Two wedding rings, linked (one in front at each crossing), with a diamond."""
+    import math
+    r = 120                                   # ring radius
+    ax, bx, cy = 186, 326, 330                # ring centres (left, right) and height
+    ra = (ax - r, cy - r, ax + r, cy + r)
+    rb = (bx - r, cy - r, bx + r, cy + r)
+    # Diamond sitting on top of the left ring: solid, with a white girdle line
+    top = cy - r - 138
+    gem = [(ax - 68, top + 50), (ax - 36, top), (ax + 36, top), (ax + 68, top + 50), (ax, top + 140)]
+    d.polygon(gem, fill=0)
+    d.line([(ax - 50, top + 50), (ax + 50, top + 50)], fill=255, width=12)
+    d.ellipse(ra, outline=0, width=LW)
+    d.ellipse(rb, outline=0, width=LW)
+    # Where the rings cross (worked out, so it stays right if sizes change).
+    # PIL angles: 0 = 3 o'clock, increasing clockwise.
+    half = (bx - ax) / 2
+    dy = math.sqrt(r * r - half * half)
+    a_top = math.degrees(math.atan2(-dy, half)) % 360      # top crossing, on the left ring
+    b_top = math.degrees(math.atan2(-dy, -half)) % 360     # top crossing, on the right ring
+    a_bot, b_bot = (360 - a_top) % 360, (360 - b_top) % 360
+
+    def crossing(behind, front, behind_deg, front_deg):
+        """Break the ring behind just wider than the front ring, then redraw the front."""
+        d.arc((behind[0] - 6, behind[1] - 6, behind[2] + 6, behind[3] + 6),
+              behind_deg - 10, behind_deg + 10, fill=255, width=LW + 12)
+        d.arc(front, front_deg - 16, front_deg + 16, fill=0, width=LW)
+    crossing(rb, ra, b_top, a_top)            # top: left ring in front
+    crossing(ra, rb, a_bot, b_bot)            # bottom: right ring in front
+
+
+def _rotate(points, cx, cy, degrees):
+    """Turn (x, y) points about (cx, cy) by an angle (clockwise on screen)."""
+    import math
+    a = math.radians(degrees)
+    c, s = math.cos(a), math.sin(a)
+    return [(cx + (x - cx) * c - (y - cy) * s, cy + (x - cx) * s + (y - cy) * c) for x, y in points]
+
+
+def _rounded_bar(cx, cy, length, height):
+    """Outline points of a bar with round ends, centred on (cx, cy)."""
+    import math
+    r = height / 2
+    left, right = cx - length / 2 + r, cx + length / 2 - r
+    pts = [(right + r * math.cos(math.radians(a)), cy + r * math.sin(math.radians(a))) for a in range(-90, 91, 6)]
+    pts += [(left + r * math.cos(math.radians(a)), cy + r * math.sin(math.radians(a))) for a in range(90, 271, 6)]
+    return pts
+
+
+def _heart_points(cx, cy, scale, point_to):
+    """Heart outline centred on (cx, cy) with its point aimed at an angle (0 = right, 90 = down)."""
+    import math
+    pts = []
+    for i in range(0, 361, 4):
+        t = math.radians(i)
+        x = 16 * math.sin(t) ** 3
+        y = -(13 * math.cos(t) - 5 * math.cos(2 * t) - 2 * math.cos(3 * t) - math.cos(4 * t))
+        pts.append((cx + x * scale, cy + y * scale))
+    return _rotate(pts, cx, cy, point_to - 90)      # drawn pointing down; turn it
+
+
+def _icon_get_well(d):
+    """Get well: a sticking plaster at 45 degrees with a pad and air holes."""
+    cx = cy = 256
+    strip = _rotate(_rounded_bar(cx, cy, 470, 170), cx, cy, -45)
+    d.line(strip + strip[:2], fill=0, width=LW, joint="curve")
+    pad = _rotate([(cx - 80, cy - 85), (cx + 80, cy - 85), (cx + 80, cy + 85), (cx - 80, cy + 85)], cx, cy, -45)
+    d.line(pad + pad[:2], fill=0, width=LW - 6, joint="curve")
+    for dx in (-160, -125, 125, 160):                # air holes at both ends
+        for dy in (-30, 30):
+            (x, y), = _rotate([(cx + dx, cy + dy)], cx, cy, -45)
+            d.ellipse((x - 11, y - 11, x + 11, y + 11), fill=0)
+
+
+def _curve(p0, p1, p2, steps=24):
+    """Points along a smooth curve from p0 to p2, pulled towards p1."""
+    return [((1 - t) ** 2 * p0[0] + 2 * (1 - t) * t * p1[0] + t * t * p2[0],
+             (1 - t) ** 2 * p0[1] + 2 * (1 - t) * t * p1[1] + t * t * p2[1])
+            for t in (i / steps for i in range(steps + 1))]
+
+
+def _icon_good_luck(d):
+    """Good luck: a four-leaf clover - four solid heart leaves, stem out of the bottom."""
+    import math
+    cx, cy = 256, 200
+    # Stem first, so the bottom leaf covers its top end
+    d.line(_curve((cx, cy + 120), (cx - 6, cy + 250), (cx + 80, cy + 300)), fill=0, width=30, joint="curve")
+    for out in (-90, 0, 90, 180):                                  # up, right, down, left
+        a = math.radians(out)
+        hx, hy = cx + 100 * math.cos(a), cy + 100 * math.sin(a)
+        d.polygon(_heart_points(hx, hy, 6.0, out + 180), fill=0)  # point to the middle
+    for diag in (45, 135, 225, 315):                               # thin gaps between leaves
+        a = math.radians(diag)
+        d.line([(cx, cy), (cx + 200 * math.cos(a), cy + 200 * math.sin(a))], fill=255, width=16)
+
+
+def _icon_horseshoe(d):
+    """Horseshoe, open end up (so the luck doesn't run out), with nail holes."""
+    import math
+    box = (100, 56, 412, 456)                          # taller than wide
+    cx, cy = (box[0] + box[2]) / 2, (box[1] + box[3]) / 2
+    thick = 84
+    d.arc(box, 296, 604, fill=0, width=thick)          # from upper right, under, to upper left
+    mid_rx = (box[2] - box[0]) / 2 - thick / 2         # middle of the band
+    mid_ry = (box[3] - box[1]) / 2 - thick / 2
+    for ang in (318, 350, 22, 158, 190, 222):          # nail holes
+        a = math.radians(ang)
+        x, y = cx + mid_rx * math.cos(a), cy + mid_ry * math.sin(a)
+        d.ellipse((x - 12, y - 12, x + 12, y + 12), fill=255)
+
+
+def _leaf(d, base, tip, width):
+    """A solid pointed leaf from base to tip, widest in the middle."""
+    import math
+    (bx, by), (tx, ty) = base, tip
+    length = math.hypot(tx - bx, ty - by)
+    nx, ny = -(ty - by) / length, (tx - bx) / length   # sideways direction
+    side1, side2 = [], []
+    for i in range(21):
+        t = i / 20
+        x, y = bx + (tx - bx) * t, by + (ty - by) * t
+        off = math.sin(math.pi * t) * width / 2
+        side1.append((x + nx * off, y + ny * off))
+        side2.append((x - nx * off, y - ny * off))
+    d.polygon(side1 + side2[::-1], fill=0)
+
+
+def _tulip(d, x, y, w, h):
+    """A solid tulip head with its base at (x, y): three points on top, round cup below."""
+    import math
+    pts = [(x - w / 2, y - h), (x - w / 4, y - h * 0.62), (x, y - h * 1.08),
+           (x + w / 4, y - h * 0.62), (x + w / 2, y - h)]
+    for i in range(0, 181, 10):
+        a = math.radians(i)
+        pts.append((x + (w / 2) * math.cos(a), y - h * 0.45 + h * 0.45 * math.sin(a)))
+    d.polygon(pts, fill=0)
+
+
+def _icon_flowers(d):
+    """Flowers: a bunch of three tulips with two leaves, tied with a band."""
+    tie = (256, 380)                                   # where the stems are tied
+    heads = [(146, 220, 104, 112), (256, 160, 112, 122), (366, 220, 104, 112)]
+    for hx, hy, _, _ in heads:                         # stems curve in to the tie
+        d.line(_curve((hx, hy), ((hx + tie[0]) / 2, hy + 90), tie), fill=0, width=18, joint="curve")
+    for dx in (-26, 0, 26):                            # stem ends below the tie
+        d.line([(tie[0] + dx * 0.6, tie[1]), (tie[0] + dx, 490)], fill=0, width=16)
+    _leaf(d, (240, 370), (92, 300), 52)
+    _leaf(d, (272, 370), (420, 300), 52)
+    for hx, hy, w, h in heads:
+        _tulip(d, hx, hy + 6, w, h)
+    d.rounded_rectangle((218, 372, 294, 412), radius=10, fill=0)   # the band
+
+
+def _round_line(d, points, width):
+    """A line through points with rounded ends (and rounded joins)."""
+    d.line(points, fill=0, width=width, joint="curve")
+    for x, y in (points[0], points[-1]):
+        d.ellipse((x - width / 2, y - width / 2, x + width / 2, y + width / 2), fill=0)
+
+
+def _dot(d, x, y, r):
+    """A solid dot of radius r."""
+    d.ellipse((x - r, y - r, x + r, y + r), fill=0)
+
+
+def _icon_snowman(d):
+    """Snowman in a clean line style: the body's outline stops where it meets
+    the head (no overlapping circles), even rounded lines, stick arms with a
+    forked hand, two buttons, a face, a scarf and a short ground line."""
+    import math
+    w = 30                                               # line width
+    hx, hy, hr = 256, 128, 80                            # head
+    bx, by, br = 256, 318, 140                           # body
+    d.ellipse((hx - hr, hy - hr, hx + hr, hy + hr), outline=0, width=w)
+    # Body: only the part of its circle outside the head. Find where the two
+    # circles meet and draw the arc round the bottom between those points.
+    dist = by - hy
+    a = (br * br - hr * hr + dist * dist) / (2 * dist)   # from body centre up to the meeting line
+    h = math.sqrt(max(br * br - a * a, 0))               # half the width of the meeting line
+    start = math.degrees(math.atan2(-a, h)) % 360        # right meeting point (PIL angles)
+    end = math.degrees(math.atan2(-a, -h)) % 360         # left meeting point
+    d.arc((bx - br, by - br, bx + br, by + br), start, end + 360 if end < start else end, fill=0, width=w)
+    for side in (-1, 1):                                 # stick arms with a forked hand
+        ex, ey = bx + side * 196, 196
+        _round_line(d, [(bx + side * 112, 262), (ex, ey)], 24)
+        _round_line(d, [(ex - side * 6, ey - 44), (ex, ey), (ex + side * 44, ey + 4)], 20)
+    for y in (300, 376):                                 # buttons
+        _dot(d, bx, y, 17)
+    _round_line(d, [(86, 478), (426, 478)], w)           # ground
+    _dot(d, hx - 26, hy - 12, 12)                        # eyes
+    _dot(d, hx + 26, hy - 12, 12)
+    d.polygon([(hx - 6, hy + 14), (hx - 6, hy + 34), (hx + 46, hy + 26)], fill=0)   # carrot nose
+    _round_line(d, [(hx - 74, hy + 82), (hx, hy + 96), (hx + 74, hy + 82)], 26)     # scarf
+    _round_line(d, [(hx + 40, hy + 92), (hx + 56, hy + 150)], 24)                    # scarf tail
+
+
+def _icon_snowflake(d):
+    """Snowflake: six arms, each with two pairs of side branches."""
+    import math
+    cx, cy, arm = 256, 256, 220
+    for k in range(6):
+        a = math.radians(90 + k * 60)
+        ex, ey = cx + arm * math.cos(a), cy + arm * math.sin(a)
+        d.line([(cx, cy), (ex, ey)], fill=0, width=30)
+        for along, length in ((0.45, 70), (0.72, 52)):          # side branches, angled outwards
+            bx, by = cx + arm * along * math.cos(a), cy + arm * along * math.sin(a)
+            for turn in (-50, 50):
+                b = a + math.radians(turn)
+                d.line([(bx, by), (bx + length * math.cos(b), by + length * math.sin(b))], fill=0, width=24)
+        d.ellipse((ex - 17, ey - 17, ex + 17, ey + 17), fill=0)  # rounded tips
+    d.ellipse((cx - 40, cy - 40, cx + 40, cy + 40), fill=0)       # centre
+
+
+def _sparkle(d, cx, cy, r):
+    """A small four-pointed sparkle."""
+    import math
+    pts = []
+    for i in range(8):
+        rr = r if i % 2 == 0 else r * 0.32
+        a = math.radians(-90 + i * 45)
+        pts.append((cx + rr * math.cos(a), cy + rr * math.sin(a)))
+    d.polygon(pts, fill=0)
+
+
+def _dotted_burst(d, cx, cy, r, rays, dots, size):
+    """A firework burst made of rays of dots, the dots growing towards the edge."""
+    import math
+    for k in range(rays):
+        a = math.radians(k * 360 / rays - 90)
+        for j in range(dots):
+            t = 0.35 + 0.65 * j / (dots - 1)
+            _dot(d, cx + r * t * math.cos(a), cy + r * t * math.sin(a), size * (0.7 + 0.5 * t))
+
+
+def _icon_fireworks(d):
+    """Fireworks: a big dotted burst with a fine straight trail rising into
+    it (aimed at its centre, between two rays of dots), a smaller burst and
+    a sparkle."""
+    import math
+    cx, cy, r, rays = 200, 210, 180, 14                  # big burst
+    # The trail is a straight streak rising from the bottom of the icon
+    # along a line through the burst's centre. The line sits halfway between
+    # two rays, so the trail slips in between the dots, and it stops a
+    # little short of the centre.
+    a = math.radians(-90 + 360 / rays * 7.5)             # between rays 7 and 8 (just left of straight down)
+    ux, uy = math.cos(a), math.sin(a)
+    reach = (508 - cy) / uy                              # distance from the centre to the bottom edge
+    _round_line(d, [(cx + ux * reach, cy + uy * reach), (cx + ux * 112, cy + uy * 112)], 9)
+    _dotted_burst(d, cx, cy, r, rays, 4, 13)
+    _dotted_burst(d, 410, 380, 92, 10, 3, 10)            # smaller burst
+    _sparkle(d, 430, 120, 36)
+
+
+def _icon_sunshine(d):
+    """Sunshine: a bold ring with a solid centre, and twelve rounded rays, long and short."""
+    import math
+    cx = cy = 256
+    d.ellipse((cx - 104, cy - 104, cx + 104, cy + 104), outline=0, width=LW)
+    d.ellipse((cx - 60, cy - 60, cx + 60, cy + 60), fill=0)
+    for k in range(12):
+        a = math.radians(k * 30)
+        outer = 236 if k % 2 == 0 else 196               # alternate long and short rays
+        _round_line(d, [(cx + 142 * math.cos(a), cy + 142 * math.sin(a)),
+                        (cx + outer * math.cos(a), cy + outer * math.sin(a))], 30)
+
+
+def _icon_car(d):
+    """Car from the side, facing right: solid body, white windows and lights,
+    wheels set into white arches."""
+    d.rounded_rectangle((40, 250, 472, 372), radius=40, fill=0)         # lower body
+    d.polygon([(130, 262), (184, 160), (330, 160), (396, 262)], fill=0) # cabin
+    d.rounded_rectangle((170, 150, 340, 190), radius=24, fill=0)        # rounded roof
+    d.polygon([(166, 252), (204, 186), (250, 186), (250, 252)], fill=255)   # windows,
+    d.polygon([(270, 252), (270, 186), (318, 186), (366, 252)], fill=255)   # split by a pillar
+    d.rounded_rectangle((436, 278, 466, 300), radius=8, fill=255)       # headlight
+    d.rounded_rectangle((44, 278, 64, 298), radius=6, fill=255)         # rear light
+    for wx in (146, 366):                                               # wheels
+        d.ellipse((wx - 70, 302, wx + 70, 442), fill=255)               # white arch
+        d.ellipse((wx - 54, 318, wx + 54, 426), fill=0)                 # tyre
+        d.ellipse((wx - 18, 354, wx + 18, 390), fill=255)               # hub
 
 
 def _icon_house(d):
@@ -191,6 +500,9 @@ BUILTIN_ICONS = {
     "gift": _icon_gift, "birthday": _icon_birthday, "christmas": _icon_christmas,
     "celebration": _icon_celebration, "heart": _icon_heart, "star": _icon_star,
     "balloon": _icon_balloon, "wedding": _icon_wedding, "new home": _icon_house,
+    "get well": _icon_get_well, "good luck": _icon_good_luck, "horseshoe": _icon_horseshoe,
+    "flowers": _icon_flowers, "snowman": _icon_snowman, "snowflake": _icon_snowflake,
+    "fireworks": _icon_fireworks, "sunshine": _icon_sunshine, "car": _icon_car,
 }
 
 
@@ -218,14 +530,16 @@ def _custom_names():
 
 
 def list_icons():
-    """All icons for the page: custom ones first, then built-ins.
+    """All icons for the page: custom ones first, then built-ins, each group
+    in alphabetical order.
 
-    Each entry is {"name", "custom"}. A custom icon with a built-in's name
-    replaces that built-in; deleting it brings the built-in back.
+    Each entry is {"name", "custom"}. Uploads can't reuse a name, but a PNG
+    copied into ICON_DIR by hand with a built-in's name replaces that
+    built-in (deleting it brings the built-in back).
     """
-    custom = _custom_names()
-    return ([{"name": n, "custom": True} for n in custom] +
-            [{"name": k, "custom": False} for k in BUILTIN_ICONS if k not in custom])
+    custom = sorted(_custom_names(), key=str.lower)
+    builtin = sorted((k for k in BUILTIN_ICONS if k not in custom), key=str.lower)
+    return [{"name": n, "custom": True} for n in custom] + [{"name": k, "custom": False} for k in builtin]
 
 
 def load_icon(name, size):
@@ -258,10 +572,16 @@ def save_custom_icon(name, stream):
     turned to greyscale, trimmed to its content, fitted into a 512-dot
     square and converted to pure black and white, then saved as
     <name>.png in ICON_DIR. On the label it prints about 16mm square.
+    Names must be new: a name already used by one of your icons or a
+    built-in icon is refused (delete yours first to replace it).
     """
     name = clean_icon_name(name)
     if not name or name == "none":
         return None, "Give the icon a name: letters, numbers, spaces or hyphens (up to 30)."
+    if name in BUILTIN_ICONS:
+        return None, f"There's already a built-in icon called “{name}”. Choose another name."
+    if os.path.exists(os.path.join(ICON_DIR, f"{name}.png")):
+        return None, f"You already have an icon called “{name}”. Choose another name, or delete yours first."
     try:
         img = Image.open(stream)
         if img.format not in UPLOAD_FORMATS:
@@ -368,39 +688,97 @@ def draw_lines(lines, height_pad=TOP, left=SIDE, width=WIDTH, min_height=0):
 
 
 # ---------------------------------------------------------------- labels
+# Address label sizes (dots)
+NAME_SIZE = 66          # the name's normal font size
+NAME_BESIDE_MIN = 56    # smallest the name may get beside an icon before it moves on top
+ICON_SIZE = 190         # icon beside the whole block (about 16mm)
+ICON_GAP = 22           # space between icon and text
+NAME_WRAP_BELOW = 52    # a name that would be smaller than this on one line goes on two
+
+
+def name_lines(name, width):
+    """Line specs for the name: one line, or two if that lets it be bigger.
+
+    A long name on one line can end up smaller than the address. If one
+    line would be below NAME_WRAP_BELOW, try every split between words and
+    use the two-line version that allows the largest size (if it's bigger).
+    """
+    size = fit_size([name], "cond", NAME_SIZE, width)
+    words = name.split()
+    if size >= NAME_WRAP_BELOW or len(words) < 2:
+        return [{"text": name, "role": "cond", "size": size}]
+    best, best_size = None, size
+    for i in range(1, len(words)):
+        pair = [" ".join(words[:i]), " ".join(words[i:])]
+        s2 = fit_size(pair, "cond", NAME_SIZE, width)
+        if s2 > best_size:
+            best, best_size = pair, s2
+    if not best:
+        return [{"text": name, "role": "cond", "size": size}]
+    return [{"text": t, "role": "cond", "size": best_size, "spacing": 1.05} for t in best]
+
+
 def address(data):
     """
     Address label: large condensed name, address lines underneath,
     optional icon on the left (gift, birthday cake, Christmas tree...).
     data: name, address (multi-line), icon
+
+    Two layouts when there's an icon:
+      - beside: icon on the left of the name and address (short names);
+      - name on top: when the name would have to shrink below
+        NAME_BESIDE_MIN to fit beside the icon, it goes across the full
+        width on top and the icon sits beside the address lines only,
+        so long names stay big.
+    A name too long for one line at a decent size goes on two lines
+    (split between words), with or without an icon.
     """
     name = (data.get("name") or "").strip()
     addr = [l.strip() for l in (data.get("address") or "").splitlines() if l.strip()]
     icon_name = data.get("icon") or "none"
-
-    # Provisional text block to size the icon against
-    icon_size = 0
     has_icon = icon_name != "none" and load_icon(icon_name, 32) is not None
-    text_left = SIDE
-    if has_icon:
-        icon_size = 190
-        text_left = SIDE + icon_size + 22
-    max_w = WIDTH - text_left - SIDE
+    full_w = WIDTH - 2 * SIDE                     # text width without an icon
+    beside_w = full_w - ICON_SIZE - ICON_GAP      # text width next to an icon
+    addr_start = 48 if len(addr) <= 4 else 42     # smaller text for long addresses
 
-    name_size = fit_size([name], "cond", 66, max_w)
-    addr_size = fit_size(addr, "sans", 48 if len(addr) <= 4 else 42, max_w)
+    def address_lines(size, first_gap):
+        """Line specs for the address at a font size."""
+        return [{"text": a, "role": "sans", "size": size, "gap": first_gap if i == 0 else 0, "spacing": 1.12}
+                for i, a in enumerate(addr)]
 
-    lines = [{"text": name, "role": "cond", "size": name_size}]
-    for i, a in enumerate(addr):
-        lines.append({"text": a, "role": "sans", "size": addr_size, "gap": 6 if i == 0 else 0, "spacing": 1.12})
+    # No icon: name (on two lines if it's long) and address across the full width
+    if not has_icon:
+        lines = name_lines(name, full_w) + address_lines(fit_size(addr, "sans", addr_start, full_w), 6)
+        return draw_lines(lines)
 
-    text_img = draw_lines(lines, left=0, width=max_w + 2)
-    h = max(text_img.height, (icon_size + 2 * TOP) if has_icon else 0)
+    name_beside = fit_size([name], "cond", NAME_SIZE, beside_w)
+    addr_size = fit_size(addr, "sans", addr_start, beside_w)
+
+    # Short name: icon beside the whole block (the original layout)
+    if name_beside >= NAME_BESIDE_MIN or not addr:
+        lines = [{"text": name, "role": "cond", "size": name_beside}] + address_lines(addr_size, 6)
+        text_img = draw_lines(lines, left=0, width=beside_w + 2)
+        h = max(text_img.height, ICON_SIZE + 2 * TOP)
+        img = Image.new("L", (WIDTH, h), 255)
+        img.paste(text_img, (SIDE + ICON_SIZE + ICON_GAP, (h - text_img.height) // 2))
+        img.paste(load_icon(icon_name, ICON_SIZE), (SIDE, (h - ICON_SIZE) // 2))
+        return img
+
+    # Long name: name across the full width on top (on two lines if it's
+    # very long), icon beside the address. The icon matches the address
+    # block's height (between 130 and 190 dots).
+    name_img = draw_lines(name_lines(name, full_w), height_pad=TOP)
+    addr_img = draw_lines(address_lines(addr_size, 0), height_pad=0, left=0, width=beside_w + 2)
+    icon_size = max(130, min(ICON_SIZE, addr_img.height))
+    row_h = max(addr_img.height, icon_size)
+    name_h = name_img.height - TOP // 2            # keep the name close to the address
+    h = name_h + row_h + TOP
     img = Image.new("L", (WIDTH, h), 255)
-    img.paste(text_img, (text_left, (h - text_img.height) // 2))
-    if has_icon:
-        icon = load_icon(icon_name, icon_size)
-        img.paste(icon, (SIDE, (h - icon_size) // 2))
+    img.paste(name_img.crop((0, 0, WIDTH, name_h)), (0, 0))
+    img.paste(addr_img, (SIDE + ICON_SIZE + ICON_GAP, name_h + (row_h - addr_img.height) // 2))
+    # Centre the icon in the same column it uses in the other layout
+    icon_x = SIDE + (ICON_SIZE - icon_size) // 2
+    img.paste(load_icon(icon_name, icon_size), (icon_x, name_h + (row_h - icon_size) // 2))
     return img
 
 

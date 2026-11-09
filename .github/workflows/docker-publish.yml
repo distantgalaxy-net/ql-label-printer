@@ -1,11 +1,12 @@
 # ------------------------------------------------------------------
 # ql-label-printer - build and publish the Docker image to Docker Hub
-# Date: 2026-11-08 18:05 GMT
+# Date: 2026-11-09 10:40 GMT (updated; first written 2026-11-08 18:05 GMT)
 # Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
 #
 # When it runs:
 #   - A version tag is pushed, e.g. by publishing a GitHub release "v1.0.0".
-#     The image is tagged 1.0.0, 1.0 and latest.
+#     The image is tagged 1.0.0, 1.0 and latest. The tag must match
+#     app/VERSION (shown in the Settings tab), or nothing is published.
 #   - By hand: Actions tab -> "Publish Docker image" -> Run workflow.
 #     The image is tagged with the branch name (e.g. "main") - handy for
 #     testing without changing "latest".
@@ -39,6 +40,18 @@ jobs:
       # Get the code at the tag (or branch) that triggered the run
       - name: Check out the code
         uses: actions/checkout@v4
+
+      # A release tag must match app/VERSION, so the version shown in the
+      # Settings tab is always the one published (manual runs skip this)
+      - name: Check the tag matches app/VERSION
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          file_version="$(head -n 1 app/VERSION | tr -d '[:space:]')"
+          tag_version="${GITHUB_REF_NAME#v}"
+          if [ "$file_version" != "$tag_version" ]; then
+            echo "::error::Tag v$tag_version doesn't match app/VERSION ($file_version). Update app/VERSION, then tag again."
+            exit 1
+          fi
 
       # QEMU lets this Intel machine build the ARM version too
       - name: Set up QEMU (for ARM builds)

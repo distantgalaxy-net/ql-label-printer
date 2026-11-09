@@ -1,6 +1,6 @@
 # ------------------------------------------------------------------
 # labelprinter - label print service (web page + API)
-# Date: 2026-11-08 23:20 GMT (updated; first written 2026-11-07 18:10 GMT)
+# Date: 2026-11-09 19:40 GMT (updated; first written 2026-11-07 18:10 GMT)
 # Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
 #
 # Serves the phone-friendly web page and a small JSON API:
@@ -16,7 +16,8 @@
 #   POST /api/preview/<kind>    PNG preview of a label
 #   POST /api/print/<kind>      print it  -> {"ok": bool, "message": str}
 #   POST /api/printer/test      check the printer can be reached (no print)
-#   GET  /api/options           printer models and time zones
+#   GET  /api/printer/status    is it ready, and which roll is loaded? (no print)
+#   GET  /api/options           printer models, time zones and the app version
 #   GET  /login, POST /api/login, POST /api/logout   optional password
 #   PUT  /api/password          set, change or remove the password
 # <kind> is address | food | travel | battery | network
@@ -45,11 +46,28 @@ from waitress import serve
 
 import labels
 import printer
+import status as printer_status
 from auth import Auth, session_lifetime
 
 DATA_DIR = os.environ.get("DATA_DIR", "/data")
 SETTINGS_FILE = os.path.join(DATA_DIR, "settings.json")
 STATIC = os.path.join(os.path.dirname(__file__), "static")
+
+
+def read_version():
+    """The app's version from the VERSION file next to this one (e.g. "1.1.1").
+
+    Test builds add one to the last number; releases are tagged with the
+    same number (the Docker Hub workflow checks they match).
+    """
+    try:
+        with open(os.path.join(os.path.dirname(__file__), "VERSION"), encoding="utf-8") as fh:
+            return fh.readline().strip() or "unknown"
+    except OSError:
+        return "unknown"
+
+
+APP_VERSION = read_version()
 
 # Starting settings, written on first run; everything is editable in the page
 DEFAULT_SETTINGS = {
@@ -294,8 +312,8 @@ def put_settings():
 
 @app.get("/api/options")
 def options():
-    """Choices for the Settings tab: printer models and time zone names."""
-    return jsonify({"models": printer.supported_models(), "timezones": TIMEZONES})
+    """Choices for the Settings tab: printer models, time zone names and the version."""
+    return jsonify({"models": printer.supported_models(), "timezones": TIMEZONES, "version": APP_VERSION})
 
 
 @app.get("/api/icons")
@@ -321,7 +339,7 @@ def upload_icon():
     """Save an uploaded picture as a custom icon (multipart form: name, file).
 
     The picture is converted to a black-and-white square in /data/icons.
-    Using a built-in icon's name replaces that built-in until it's deleted.
+    A name already used (by your icons or a built-in one) is refused.
     """
     upload = request.files.get("file")
     if not upload:
@@ -396,7 +414,14 @@ def preview(kind):
 
 @app.post("/api/print/<kind>")
 def do_print(kind):
-    """Render a label and send it to the printer saved in settings."""
+    """Render a label and send it to the printer saved in settings.
+
+    Just before sending, the printer's status is checked (status.py). If it
+    reports a problem (unavailable, cover open, no roll, wrong roll, error)
+    nothing is sent: the reply is 409 with the reason and the full status
+    under "printer", so the page can disable Print. A printer that can't
+    report its status is printed to as before. Applies to Home Assistant too.
+    """
     problem = setup_problem(load_settings())
     if problem:
         return jsonify({"ok": False, "message": problem}), 409
@@ -409,6 +434,12 @@ def do_print(kind):
     except (TypeError, ValueError):
         copies = 1
     target = load_settings()["printer"]
+    # Check first, so a label isn't sent into an open or empty printer
+    # (the printer can't tell us afterwards whether a label came out)
+    with printer.job_lock():
+        state = printer_status.check(target.get("host"), target.get("port") or printer.DEFAULT_PORT)
+    if not state["ok"]:
+        return jsonify({"ok": False, "message": f"Not printed: {state['message']}", "printer": state}), 409
     ok, message = printer.print_image(img, target.get("host"), target.get("port"),
                                       target.get("model"), copies)
     return jsonify({"ok": ok, "message": message}), (200 if ok else 502)
@@ -428,10 +459,29 @@ def test_printer():
     return jsonify({"ok": ok, "message": message}), (200 if ok else 502)
 
 
+@app.get("/api/printer/status")
+def get_printer_status():
+    """Is the saved printer ready to print, and which roll is loaded?
+
+    Checks the connection, then asks the printer for its status (see
+    status.py). Prints nothing. The page uses this to disable Print with
+    a message such as "Printer cover open"; "detail" holds what the
+    printer actually said, shown in the Settings tab.
+    """
+    target = load_settings()["printer"]
+    if not target.get("host"):
+        return jsonify({"ok": False, "state": "unavailable", "message": "No printer set up yet",
+                        "media": None, "source": "settings", "detail": {}})
+    # Wait for any print job to finish first, so the two never overlap
+    with printer.job_lock():
+        result = printer_status.check(target.get("host"), target.get("port") or printer.DEFAULT_PORT)
+    return jsonify(result)
+
+
 @app.get("/health")
 def health():
-    """Health check used by the Docker HEALTHCHECK."""
-    return jsonify({"ok": True})
+    """Health check used by the Docker HEALTHCHECK (also says which version is running)."""
+    return jsonify({"ok": True, "version": APP_VERSION})
 
 
 if __name__ == "__main__":
@@ -441,4 +491,5 @@ if __name__ == "__main__":
     if auth.reset_from_env():
         print("RESET_PASSWORD is set: the password has been removed. "
               "Take RESET_PASSWORD out of docker-compose.yml now.", flush=True)
+    print(f"LabelPrinter {APP_VERSION} starting", flush=True)
     serve(app, host="0.0.0.0", port=int(os.environ.get("PORT", "8013")))

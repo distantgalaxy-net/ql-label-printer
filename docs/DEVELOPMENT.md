@@ -3,7 +3,7 @@
 Read this before changing the code. It explains what we're building, the decisions already made
 and the constraints that aren't obvious from the code.
 
-_Last updated: 2026-11-08 23:30 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Last updated: 2026-11-09 20:00 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 ---
 
@@ -24,8 +24,9 @@ AB1 2CD", `192.168.1.20`, `labels.home.example`).
 
 **Built:**
 - Flask web page + JSON API, rendered with Pillow, printed with `brother_ql_next`.
-- Label types: `address` (optional icon; custom icons uploaded/deleted in
-  the page), `food` (freezer/fridge/cupboard, use-by in days or months,
+- Label types: `address` (optional icon – 18 built-ins drawn in code, plus
+  the user's own uploaded/deleted in the page, names must be new; long
+  names move above the icon or wrap onto two lines), `food` (freezer/fridge/cupboard, use-by in days or months,
   cooking instructions, notes, presets; `freezer` is an API alias),
   `travel` (saved details shown locked with Edit/Clear; flights built one
   by one or pasted, sorted, split into journeys; saved trips), `battery`
@@ -44,6 +45,45 @@ AB1 2CD", `192.168.1.20`, `labels.home.example`).
   in the browser's localStorage so the page and login page colour
   themselves before settings load. Success/error colours stay green/red
   whatever the accent.
+- **Contact cards** (Address tab): "Import contact card" reads a `.vcf`
+  in the browser (`parseVCards` in `index.html`: vCard 2.1/3.0/4.0,
+  folded lines, quoted-printable, Apple `itemN.X-ABLabel` labels). Never
+  uploaded or stored. Works on every device; computers can drop the file
+  on the Address tab. Several contacts → name list (search when > 8).
+- **Contact picker** (Address tab, Android only): the browser's Contact Picker API
+  (`navigator.contacts.select(["name","address"])`), all in the page – no
+  server code, nothing stored. Shown only when the API exists, the page is
+  a secure context (HTTPS or localhost) and `address` is supported;
+  otherwise a note chosen by device type: Android over HTTP → needs a
+  secure connection; Android without a picker → needs Chrome; iPhone →
+  how to save a contact card; computer → how to export one. Safari's
+  picker only returns name/email/tel (WebKit `ContactsManager`), never
+  addresses, so iPhones use contact cards; if Apple adds addresses the
+  feature check shows the button automatically. The browser sees the HTTPS hop to the reverse proxy, so
+  the plain-HTTP hop inside the NAS doesn't matter. Several
+  addresses → the user picks one (no default). Tested with a stand-in
+  picker only; Android Chrome is the target, iPhone untested.
+- **Printer status** (`app/status.py`, `GET /api/printer/status`): TCP
+  connect (3 s) → "Printer unavailable" if it fails; then Brother's status
+  request (`ESC i S`) on that connection, decoded with brother_ql's
+  `interpret_response`; if no reply in 2 s, SNMP v1 GET-NEXT (stdlib
+  only, community `public`) for hrPrinterDetectedErrorState,
+  hrDeviceStatus, prtInputMediaName and prtCoverStatus, plus the alert
+  table (prtAlertCode/prtAlertDescription, up to 6 rows) and display text;
+  SNMP is only skipped if sysDescr gets no answer. No status from either
+  → "Printer connected" (reachable, status unknown; printing allowed). Status checks take
+  the printer job lock, so they never overlap a print. The page checks on
+  load, after printing, on becoming visible, and while visible every 60 s
+  (heartbeat) or every 30 s while not ready; Print stays disabled until a
+  check says ready. A printer that ignores `ESC i S` is remembered for an
+  hour so checks go straight to SNMP. `/api/print` also checks just before
+  sending (under the job lock) and refuses with 409 + `printer` if the
+  printer reports a problem (from the page or Home Assistant); printers
+  with unknown status print as before. **Verified on a QL-810W:** no reply to
+  `ESC i S` over Wi-Fi; SNMP works (alert 3 = cover open, 808 = no roll,
+  media name e.g. `62mm / 2.4"` or `29mm x 90mm / 1.1" x 3.5"`). Needs
+  UDP 161 allowed through any firewall. Settings → Check printer shows the
+  raw reply for other models.
 - **Print** sits directly under the label preview (no fixed bottom bar),
   so what you see and the button are together.
 - **Messages** appear next to the button that caused them (`say()` in
@@ -55,10 +95,15 @@ AB1 2CD", `192.168.1.20`, `labels.home.example`).
   signed session cookie (30 days) for browsers, HTTP Basic auth for scripts.
 
 **Ideas, not started yet:**
-- Address lookup from Google Contacts (People API).
 - Guest Wi-Fi: per-guest UniFi hotspot vouchers printed as QR/code labels.
 - Pick network devices and battery devices from Home Assistant (battery
   labels must still work for devices not in HA).
+
+**Decided against (for now):** live contact lookups (Google People API,
+iCloud/CardDAV). Google needs every installer to set up a Cloud project
+and OAuth (with a 7-day token limit in testing mode); CardDAV means
+storing account passwords. Contact-card import plus the Android picker
+covers every device without either.
 
 ## Hard constraints
 
@@ -118,9 +163,11 @@ app/main.py        Flask routes, settings load/save (atomic write), login gate
 app/auth.py        Optional password: hash storage, cookie key, reset
 app/labels.py      All label layouts + built-in icons (drawn with Pillow)
 app/printer.py     Image -> QL raster -> send to printer; models; address checks
+app/status.py      Printer ready? Roll loaded? (connection, ESC i S, SNMP)
 app/static/index.html  Phone-first page (vanilla JS, no build step)
 app/static/login.html  Password page (only used when a password is set)
 app/static/theme.css   Accent colour shades (light + dark) and swatches
+app/VERSION        The version number (see Versions)
 Dockerfile, .dockerignore, docker-compose.yml, requirements.txt (pinned)
 .github/workflows/docker-publish.yml   Docker Hub build (multi-arch)
 ```
@@ -137,6 +184,19 @@ starts a new journey. The page mirrors this for its list.
 Adding a label type = a function in `labels.py` registered in `RENDERERS`,
 plus a `<form data-kind="...">` and tab in `index.html`. The API picks it up
 automatically.
+
+## Versions
+
+- The version lives in **`app/VERSION`** (one line, e.g. `1.1.1`). It's
+  shown at the top of the Settings tab, in `/health` and in the log at
+  start-up.
+- **Test builds:** every set of changes pushed for testing adds one to the
+  last number (1.1.1 → 1.1.2 …). Bump it in the same commit as the change.
+- **Releases:** the owner decides minor or major. Set `app/VERSION` to the
+  release number (e.g. `1.2.0`) in the pull request, then publish a GitHub
+  release tagged `v1.2.0`. The publish workflow refuses a tag that doesn't
+  match `app/VERSION`. The next test build after `1.2.0` is `1.2.1`.
+- Released so far: v1.0.0, v1.1.0, v1.2.0.
 
 ## Coding conventions
 
@@ -160,6 +220,28 @@ cd app && DATA_DIR=/tmp/dd PORT=8013 ../.venv/bin/python main.py
 # open http://127.0.0.1:8013 - Settings needs a reachable printer to save;
 # a tiny TCP listener on a spare local port works as a stand-in.
 ```
+
+**Test copy on a Synology NAS (no command line):** download the branch
+as a ZIP (`https://github.com/<owner>/ql-label-printer/archive/refs/heads/<branch>.zip`),
+copy the *contents* of its top folder into e.g. `docker/ql-label-printer-test`,
+and create a Container Manager project there with:
+
+```yaml
+services:
+  labelprinter-test:
+    build: .
+    pull_policy: build              # rebuild from the code every time
+    container_name: labelprinter-test
+    ports:
+      - "127.0.0.1:8014:8013"       # behind an HTTPS reverse proxy entry
+    volumes:
+      - ./data:/data
+```
+
+`pull_policy: build` matters: without it, Container Manager's **Build**
+reuses the image it built last time and the old code keeps running. After
+updating the files: Action → Stop, then Action → Build. The version at the
+top of Settings (or `/health`) confirms which build is running.
 
 `printer.build(image, model)` converts without sending – use it to prove an
 image is valid for a model (it raises if the size is wrong).
@@ -201,6 +283,43 @@ image is valid for a model (it raises if the size is wrong).
   read into the flight boxes for checking, then added.
 - 2026-11-08 – Accent colour choice in Settings (green default; blue, red,
   pink, purple, orange, monochrome), each tuned for light and dark themes.
+- 2026-11-09 – v1.2.0: everything from 1.1.1–1.1.15 (food labels, custom
+  icons, flight builder, colours, contacts, printer status, new icons).
+- 2026-11-09 – Icon uploads must use a new name: one already used by the
+  user's icons or a built-in is refused (no silent replacing; delete first).
+- 2026-11-09 – Icon list order: None, then the user's icons, then
+  built-ins, each alphabetical, under "Your icons" / "Built-in icons"
+  headings (user icons first: few, and the ones chosen on purpose).
+- 2026-11-09 – Address label: a name that would shrink below 56 dots
+  beside the icon moves across the full width on top, with the icon
+  (130–190 dots, matching the address height) beside the address only.
+  A name below 52 dots on one line is split over two lines between words.
+  Short names keep the original layout. Added horseshoe and flowers
+  icons; clover stem now comes out of the bottom leaf. Then snowman and
+  snowflake; snowman and celebration (party popper) later redrawn to be
+  clearer and livelier; snowman then simplified (thin outlines, tall oval
+  body, no hat), and finally a clean line style (body outline stops at
+  the head, rounded lines, ground line; idea from common line-icon sets).
+  Fireworks added, later as dotted bursts with a fine straight trail
+  aimed at the big burst's centre (between two rays of dots); a curved
+  trail looked like a flower stem. Sunshine and car added.
+- 2026-11-09 – Built-in icons: wedding redrawn as linked rings with a
+  diamond (two plain circles didn't read as anything); added get well
+  (sticking plaster) and good luck (four-leaf clover). Drawn in code like
+  the others, checked at label size (190 dots, black and white).
+- 2026-11-09 – Page checks the printer and disables Print with the reason
+  (unavailable / cover open / spool finished / wrong roll). brother_ql's
+  network backend can't read status, so status.py asks the printer
+  directly, with SNMP as the fallback; SNMP written with the standard
+  library to avoid a new dependency.
+- 2026-11-09 – Contact card (.vcf) import added for computers and iPhones
+  (Safari's picker can't share addresses). Read in the browser only.
+- 2026-11-09 – Contacts on phones via the browser's Contact Picker API
+  rather than Google's People API: no Google sign-in or API keys, works
+  with whatever account the phone uses, and the page only ever sees the
+  one contact picked. Detection is by feature (does the picker exist?),
+  not by device name; the device type only chooses the hint. Requires
+  HTTPS.
 - 2026-11-08 – Distributed as a Docker Hub image built by GitHub Actions,
   so installs and updates are a download instead of copying code. `data/`
   is excluded from the build context (`.dockerignore`).
