@@ -1,6 +1,6 @@
 # ------------------------------------------------------------------
 # labelprinter - label layouts
-# Date: 2026-11-09 11:50 GMT (updated; first written 2026-11-07 18:10 GMT)
+# Date: 2026-11-09 12:40 GMT (updated; first written 2026-11-07 18:10 GMT)
 # Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
 #
 # Turns form data into a black-and-white image the exact width of the
@@ -248,12 +248,19 @@ def _icon_get_well(d):
             d.ellipse((x - 11, y - 11, x + 11, y + 11), fill=0)
 
 
+def _curve(p0, p1, p2, steps=24):
+    """Points along a smooth curve from p0 to p2, pulled towards p1."""
+    return [((1 - t) ** 2 * p0[0] + 2 * (1 - t) * t * p1[0] + t * t * p2[0],
+             (1 - t) ** 2 * p0[1] + 2 * (1 - t) * t * p1[1] + t * t * p2[1])
+            for t in (i / steps for i in range(steps + 1))]
+
+
 def _icon_good_luck(d):
-    """Good luck: a four-leaf clover - four solid heart leaves and a stem."""
+    """Good luck: a four-leaf clover - four solid heart leaves, stem out of the bottom."""
     import math
-    cx, cy = 248, 232
-    d.line([(cx, cy), (cx + 60, cy + 120), (cx + 120, cy + 190), (cx + 190, cy + 250)],
-           fill=0, width=30, joint="curve")                       # stem
+    cx, cy = 256, 200
+    # Stem first, so the bottom leaf covers its top end
+    d.line(_curve((cx, cy + 120), (cx - 6, cy + 250), (cx + 80, cy + 300)), fill=0, width=30, joint="curve")
     for out in (-90, 0, 90, 180):                                  # up, right, down, left
         a = math.radians(out)
         hx, hy = cx + 100 * math.cos(a), cy + 100 * math.sin(a)
@@ -261,7 +268,63 @@ def _icon_good_luck(d):
     for diag in (45, 135, 225, 315):                               # thin gaps between leaves
         a = math.radians(diag)
         d.line([(cx, cy), (cx + 200 * math.cos(a), cy + 200 * math.sin(a))], fill=255, width=16)
-    d.line([(cx + 40, cy + 40), (cx + 60, cy + 70)], fill=0, width=30)   # stem joins the leaves
+
+
+def _icon_horseshoe(d):
+    """Horseshoe, open end up (so the luck doesn't run out), with nail holes."""
+    import math
+    box = (100, 56, 412, 456)                          # taller than wide
+    cx, cy = (box[0] + box[2]) / 2, (box[1] + box[3]) / 2
+    thick = 84
+    d.arc(box, 296, 604, fill=0, width=thick)          # from upper right, under, to upper left
+    mid_rx = (box[2] - box[0]) / 2 - thick / 2         # middle of the band
+    mid_ry = (box[3] - box[1]) / 2 - thick / 2
+    for ang in (318, 350, 22, 158, 190, 222):          # nail holes
+        a = math.radians(ang)
+        x, y = cx + mid_rx * math.cos(a), cy + mid_ry * math.sin(a)
+        d.ellipse((x - 12, y - 12, x + 12, y + 12), fill=255)
+
+
+def _leaf(d, base, tip, width):
+    """A solid pointed leaf from base to tip, widest in the middle."""
+    import math
+    (bx, by), (tx, ty) = base, tip
+    length = math.hypot(tx - bx, ty - by)
+    nx, ny = -(ty - by) / length, (tx - bx) / length   # sideways direction
+    side1, side2 = [], []
+    for i in range(21):
+        t = i / 20
+        x, y = bx + (tx - bx) * t, by + (ty - by) * t
+        off = math.sin(math.pi * t) * width / 2
+        side1.append((x + nx * off, y + ny * off))
+        side2.append((x - nx * off, y - ny * off))
+    d.polygon(side1 + side2[::-1], fill=0)
+
+
+def _tulip(d, x, y, w, h):
+    """A solid tulip head with its base at (x, y): three points on top, round cup below."""
+    import math
+    pts = [(x - w / 2, y - h), (x - w / 4, y - h * 0.62), (x, y - h * 1.08),
+           (x + w / 4, y - h * 0.62), (x + w / 2, y - h)]
+    for i in range(0, 181, 10):
+        a = math.radians(i)
+        pts.append((x + (w / 2) * math.cos(a), y - h * 0.45 + h * 0.45 * math.sin(a)))
+    d.polygon(pts, fill=0)
+
+
+def _icon_flowers(d):
+    """Flowers: a bunch of three tulips with two leaves, tied with a band."""
+    tie = (256, 380)                                   # where the stems are tied
+    heads = [(146, 220, 104, 112), (256, 160, 112, 122), (366, 220, 104, 112)]
+    for hx, hy, _, _ in heads:                         # stems curve in to the tie
+        d.line(_curve((hx, hy), ((hx + tie[0]) / 2, hy + 90), tie), fill=0, width=18, joint="curve")
+    for dx in (-26, 0, 26):                            # stem ends below the tie
+        d.line([(tie[0] + dx * 0.6, tie[1]), (tie[0] + dx, 490)], fill=0, width=16)
+    _leaf(d, (240, 370), (92, 300), 52)
+    _leaf(d, (272, 370), (420, 300), 52)
+    for hx, hy, w, h in heads:
+        _tulip(d, hx, hy + 6, w, h)
+    d.rounded_rectangle((218, 372, 294, 412), radius=10, fill=0)   # the band
 
 
 def _icon_house(d):
@@ -275,7 +338,8 @@ BUILTIN_ICONS = {
     "gift": _icon_gift, "birthday": _icon_birthday, "christmas": _icon_christmas,
     "celebration": _icon_celebration, "heart": _icon_heart, "star": _icon_star,
     "balloon": _icon_balloon, "wedding": _icon_wedding, "new home": _icon_house,
-    "get well": _icon_get_well, "good luck": _icon_good_luck,
+    "get well": _icon_get_well, "good luck": _icon_good_luck, "horseshoe": _icon_horseshoe,
+    "flowers": _icon_flowers,
 }
 
 
@@ -453,39 +517,97 @@ def draw_lines(lines, height_pad=TOP, left=SIDE, width=WIDTH, min_height=0):
 
 
 # ---------------------------------------------------------------- labels
+# Address label sizes (dots)
+NAME_SIZE = 66          # the name's normal font size
+NAME_BESIDE_MIN = 56    # smallest the name may get beside an icon before it moves on top
+ICON_SIZE = 190         # icon beside the whole block (about 16mm)
+ICON_GAP = 22           # space between icon and text
+NAME_WRAP_BELOW = 52    # a name that would be smaller than this on one line goes on two
+
+
+def name_lines(name, width):
+    """Line specs for the name: one line, or two if that lets it be bigger.
+
+    A long name on one line can end up smaller than the address. If one
+    line would be below NAME_WRAP_BELOW, try every split between words and
+    use the two-line version that allows the largest size (if it's bigger).
+    """
+    size = fit_size([name], "cond", NAME_SIZE, width)
+    words = name.split()
+    if size >= NAME_WRAP_BELOW or len(words) < 2:
+        return [{"text": name, "role": "cond", "size": size}]
+    best, best_size = None, size
+    for i in range(1, len(words)):
+        pair = [" ".join(words[:i]), " ".join(words[i:])]
+        s2 = fit_size(pair, "cond", NAME_SIZE, width)
+        if s2 > best_size:
+            best, best_size = pair, s2
+    if not best:
+        return [{"text": name, "role": "cond", "size": size}]
+    return [{"text": t, "role": "cond", "size": best_size, "spacing": 1.05} for t in best]
+
+
 def address(data):
     """
     Address label: large condensed name, address lines underneath,
     optional icon on the left (gift, birthday cake, Christmas tree...).
     data: name, address (multi-line), icon
+
+    Two layouts when there's an icon:
+      - beside: icon on the left of the name and address (short names);
+      - name on top: when the name would have to shrink below
+        NAME_BESIDE_MIN to fit beside the icon, it goes across the full
+        width on top and the icon sits beside the address lines only,
+        so long names stay big.
+    A name too long for one line at a decent size goes on two lines
+    (split between words), with or without an icon.
     """
     name = (data.get("name") or "").strip()
     addr = [l.strip() for l in (data.get("address") or "").splitlines() if l.strip()]
     icon_name = data.get("icon") or "none"
-
-    # Provisional text block to size the icon against
-    icon_size = 0
     has_icon = icon_name != "none" and load_icon(icon_name, 32) is not None
-    text_left = SIDE
-    if has_icon:
-        icon_size = 190
-        text_left = SIDE + icon_size + 22
-    max_w = WIDTH - text_left - SIDE
+    full_w = WIDTH - 2 * SIDE                     # text width without an icon
+    beside_w = full_w - ICON_SIZE - ICON_GAP      # text width next to an icon
+    addr_start = 48 if len(addr) <= 4 else 42     # smaller text for long addresses
 
-    name_size = fit_size([name], "cond", 66, max_w)
-    addr_size = fit_size(addr, "sans", 48 if len(addr) <= 4 else 42, max_w)
+    def address_lines(size, first_gap):
+        """Line specs for the address at a font size."""
+        return [{"text": a, "role": "sans", "size": size, "gap": first_gap if i == 0 else 0, "spacing": 1.12}
+                for i, a in enumerate(addr)]
 
-    lines = [{"text": name, "role": "cond", "size": name_size}]
-    for i, a in enumerate(addr):
-        lines.append({"text": a, "role": "sans", "size": addr_size, "gap": 6 if i == 0 else 0, "spacing": 1.12})
+    # No icon: name (on two lines if it's long) and address across the full width
+    if not has_icon:
+        lines = name_lines(name, full_w) + address_lines(fit_size(addr, "sans", addr_start, full_w), 6)
+        return draw_lines(lines)
 
-    text_img = draw_lines(lines, left=0, width=max_w + 2)
-    h = max(text_img.height, (icon_size + 2 * TOP) if has_icon else 0)
+    name_beside = fit_size([name], "cond", NAME_SIZE, beside_w)
+    addr_size = fit_size(addr, "sans", addr_start, beside_w)
+
+    # Short name: icon beside the whole block (the original layout)
+    if name_beside >= NAME_BESIDE_MIN or not addr:
+        lines = [{"text": name, "role": "cond", "size": name_beside}] + address_lines(addr_size, 6)
+        text_img = draw_lines(lines, left=0, width=beside_w + 2)
+        h = max(text_img.height, ICON_SIZE + 2 * TOP)
+        img = Image.new("L", (WIDTH, h), 255)
+        img.paste(text_img, (SIDE + ICON_SIZE + ICON_GAP, (h - text_img.height) // 2))
+        img.paste(load_icon(icon_name, ICON_SIZE), (SIDE, (h - ICON_SIZE) // 2))
+        return img
+
+    # Long name: name across the full width on top (on two lines if it's
+    # very long), icon beside the address. The icon matches the address
+    # block's height (between 130 and 190 dots).
+    name_img = draw_lines(name_lines(name, full_w), height_pad=TOP)
+    addr_img = draw_lines(address_lines(addr_size, 0), height_pad=0, left=0, width=beside_w + 2)
+    icon_size = max(130, min(ICON_SIZE, addr_img.height))
+    row_h = max(addr_img.height, icon_size)
+    name_h = name_img.height - TOP // 2            # keep the name close to the address
+    h = name_h + row_h + TOP
     img = Image.new("L", (WIDTH, h), 255)
-    img.paste(text_img, (text_left, (h - text_img.height) // 2))
-    if has_icon:
-        icon = load_icon(icon_name, icon_size)
-        img.paste(icon, (SIDE, (h - icon_size) // 2))
+    img.paste(name_img.crop((0, 0, WIDTH, name_h)), (0, 0))
+    img.paste(addr_img, (SIDE + ICON_SIZE + ICON_GAP, name_h + (row_h - addr_img.height) // 2))
+    # Centre the icon in the same column it uses in the other layout
+    icon_x = SIDE + (ICON_SIZE - icon_size) // 2
+    img.paste(load_icon(icon_name, icon_size), (icon_x, name_h + (row_h - icon_size) // 2))
     return img
 
 

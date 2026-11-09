@@ -3,7 +3,7 @@
 Read this before changing the code. It explains what we're building, the decisions already made
 and the constraints that aren't obvious from the code.
 
-_Last updated: 2026-11-09 11:55 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Last updated: 2026-11-09 12:50 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 ---
 
@@ -270,6 +270,12 @@ image is valid for a model (it raises if the size is wrong).
   read into the flight boxes for checking, then added.
 - 2026-11-08 – Accent colour choice in Settings (green default; blue, red,
   pink, purple, orange, monochrome), each tuned for light and dark themes.
+- 2026-11-09 – Address label: a name that would shrink below 56 dots
+  beside the icon moves across the full width on top, with the icon
+  (130–190 dots, matching the address height) beside the address only.
+  A name below 52 dots on one line is split over two lines between words.
+  Short names keep the original layout. Added horseshoe and flowers
+  icons; clover stem now comes out of the bottom leaf.
 - 2026-11-09 – Built-in icons: wedding redrawn as linked rings with a
   diamond (two plain circles didn't read as anything); added get well
   (sticking plaster) and good luck (four-leaf clover). Drawn in code like
