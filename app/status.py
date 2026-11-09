@@ -1,6 +1,6 @@
 # ------------------------------------------------------------------
 # labelprinter - is the printer ready, and what roll is loaded?
-# Date: 2026-11-09 17:00 GMT (updated; first written 2026-11-09 09:40 GMT)
+# Date: 2026-11-09 18:00 GMT (updated; first written 2026-11-09 09:40 GMT)
 # Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
 #
 # check(host, port) answers, without printing anything:
@@ -26,6 +26,16 @@
 #
 # Only the 62mm continuous roll (DK-22205) is supported, so any other
 # roll is reported as "Fit 62mm continuous label".
+#
+# Confirmed on a QL-810W (2026-11-09): it never answers ESC i S over the
+# network, but answers SNMP v1 ("SNMPv3 read-write and v1/v2c read-only"
+# mode, community "public"; the firewall must allow UDP 161 to it):
+#   ready      alert 0,   cover 4, display "READY",      media "62mm / 2.4\""
+#   cover open alert 3,   cover 3, display "COVER OPEN", error flags 08
+#   no roll    alert 808, cover 4, display "READY",      media "20"
+#   29x90 roll alert 0,   media "29mm x 90mm / 1.1\" x 3.5\""
+# Printers that don't answer ESC i S are remembered for an hour, so later
+# checks go straight to SNMP instead of waiting 2 seconds each time.
 # ------------------------------------------------------------------
 import random
 import re
@@ -40,6 +50,11 @@ REPLY_TIMEOUT = 2        # seconds to wait for a status reply on that connection
 SNMP_TIMEOUT = 1.5       # seconds to wait for each SNMP answer
 SNMP_COMMUNITY = b"public"
 SUPPORTED_WIDTH_MM = 62
+
+# Printers that didn't answer ESC i S: {(host, port): when}. Later checks
+# skip the wait for an hour, then ask again (in case it was just busy).
+_no_status_reply = {}
+RETRY_STATUS_AFTER = 3600      # seconds
 
 # Brother status request: "invalidate" (200 zero bytes), "initialise"
 # (ESC @) then "status information request" (ESC i S). Prints nothing.
@@ -69,14 +84,19 @@ def check(host, port):
     """
     detail = {}
     # 1 + 2: connect, then ask for Brother's status on the same connection
+    # (unless this printer has already shown it doesn't answer that)
+    key = (host, int(port))
+    silent = time.monotonic() - _no_status_reply.get(key, -RETRY_STATUS_AFTER) < RETRY_STATUS_AFTER
     try:
         with socket.create_connection((host, int(port)), timeout=CONNECT_TIMEOUT) as sock:
-            raw = _brother_status(sock)
+            raw = b"" if silent else _brother_status(sock)
     except OSError as exc:
         detail["connection"] = str(exc)
         return _result("unavailable", source="connection", detail=detail)
     detail["connection"] = "connected"
-    detail["status_reply_hex"] = raw.hex(" ") if raw else "(no reply)"
+    detail["status_reply_hex"] = raw.hex(" ") if raw else ("(skipped: no reply before)" if silent else "(no reply)")
+    if not raw and not silent:
+        _no_status_reply[key] = time.monotonic()       # remember: skip the wait for an hour
     if raw:
         try:
             return _from_brother(interpret_response(raw), detail)
@@ -334,7 +354,25 @@ def _from_snmp(snmp, detail):
         state = "ready"                  # it reports status, and nothing is wrong
     else:
         state = "connected"              # SNMP answers, but says nothing about status
-    return _result(state, media=media_name, source="snmp", detail=detail)
+    media = None if state == "no_media" else _media_label(media_name)
+    return _result(state, media=media, source="snmp", detail=detail)
+
+
+def _media_label(name):
+    """A short roll name for the page from the printer's media name.
+
+    '62mm / 2.4"' -> "62mm continuous"; '29mm x 90mm / 1.1" x 3.5"' ->
+    "29mm x 90mm labels". Anything without a size in mm (e.g. the "20" a
+    QL-810W reports with no roll fitted) -> None.
+    """
+    if not name:
+        return None
+    metric = name.split("/")[0].strip()          # drop the inches part
+    if not re.search(r"\d+\s*mm", metric):
+        return None
+    if re.search(r"\d+\s*(mm)?\s*x\s*\d+", metric, re.I):
+        return f"{metric} labels"                 # die-cut: width x length
+    return f"{metric} continuous"
 
 
 def _wrong_media(name):

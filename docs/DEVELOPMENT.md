@@ -3,7 +3,7 @@
 Read this before changing the code. It explains what we're building, the decisions already made
 and the constraints that aren't obvious from the code.
 
-_Last updated: 2026-11-09 17:10 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Last updated: 2026-11-09 18:30 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 ---
 
@@ -72,11 +72,15 @@ AB1 2CD", `192.168.1.20`, `labels.home.example`).
   SNMP is only skipped if sysDescr gets no answer. No status from either
   → "Printer connected" (reachable, status unknown; printing allowed). Status checks take
   the printer job lock, so they never overlap a print. The page checks on
-  load, after printing, on becoming visible, and every 30 s while not
-  ready; Print stays disabled until a check says ready. Home Assistant
-  printing isn't blocked by it. **Unverified on hardware:** whether the
-  QL-810W answers `ESC i S` or SNMP over Wi-Fi – use Settings → Check
-  printer, whose details show the raw reply.
+  load, after printing, on becoming visible, and while visible every 60 s
+  (heartbeat) or every 30 s while not ready; Print stays disabled until a
+  check says ready. A printer that ignores `ESC i S` is remembered for an
+  hour so checks go straight to SNMP. Home Assistant
+  printing isn't blocked by it. **Verified on a QL-810W:** no reply to
+  `ESC i S` over Wi-Fi; SNMP works (alert 3 = cover open, 808 = no roll,
+  media name e.g. `62mm / 2.4"` or `29mm x 90mm / 1.1" x 3.5"`). Needs
+  UDP 161 allowed through any firewall. Settings → Check printer shows the
+  raw reply for other models.
 - **Print** sits directly under the label preview (no fixed bottom bar),
   so what you see and the button are together.
 - **Messages** appear next to the button that caused them (`say()` in

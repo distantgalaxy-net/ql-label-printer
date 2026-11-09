@@ -3,7 +3,7 @@
 Print useful labels on a Brother QL label printer from your phone or from
 Home Assistant.
 
-_Updated: 2026-11-09 17:10 GMT · Developer: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Updated: 2026-11-09 18:30 GMT · Developer: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 A small self-hosted web service, run in Docker (for example on a Synology
 NAS). It prints on a network-connected Brother QL printer from a
@@ -160,8 +160,9 @@ Then, if you like:
 The **Print** button sits directly under the label preview. Messages
 appear right next to the button you pressed.
 
-The page checks the printer when it opens (and after printing, and when
-you come back to it). If the printer can't print, **Print** is disabled
+The page checks the printer when it opens, after printing, when you come
+back to it, and every minute while it's open (every 30 seconds while
+there's a problem). If the printer can't print, **Print** is disabled
 with the reason – *Printer unavailable*, *Printer cover open*, *Label
 spool finished* or *Fit 62mm continuous label* – and a **Check again**
 button. When all is well it shows e.g. *Printer ready · 62mm continuous*,
@@ -170,7 +171,11 @@ status (then cover and roll problems can't be detected).
 Which of these your printer can report depends on the model: every
 printer can report *unavailable*; the roll and cover need the printer to
 answer status requests over the network (Settings → **Printer status →
-Check printer** shows what yours says).
+Check printer** shows what yours says). The QL-810W reports them over
+**SNMP**: in the printer's web settings (Network → Protocol → SNMP) keep a
+mode with *v1/v2c read-only access* (e.g. "SNMPv3 read-write access and
+v1/v2c read-only access"), and if a firewall sits between the host and
+the printer, allow **UDP port 161** to the printer as well as TCP 9100.
 
 Everything is saved in the `data/` folder (never in this repo or the
 published image), so it survives updates and is included in your backups.

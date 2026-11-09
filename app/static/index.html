@@ -1,7 +1,7 @@
 <!doctype html>
 <!--
   labelprinter - label printing page (phone-first)
-  Date: 2026-11-09 17:00 GMT (updated; first written 2026-11-07 18:15 GMT)
+  Date: 2026-11-09 18:20 GMT (updated; first written 2026-11-07 18:15 GMT)
   Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
   One form per label type; the preview updates as you type, then Print.
   The Settings tab holds the printer (model, IP address, port), the time
@@ -11,10 +11,10 @@
   Settings tab works.
   The Print button sits directly under the label preview, and messages
   appear right next to the button that was pressed, so they can't be missed.
-  The printer is checked when the page opens (and after printing, when the
-  page comes back into view, and every 30 seconds while there's a
-  problem): Print is disabled with a message such as "Printer cover open"
-  until it's ready.
+  The printer is checked when the page opens, after printing, when the
+  page comes back into view, and regularly while it's on screen (every
+  minute when ready, every 30 seconds while there's a problem): Print is
+  disabled with a message such as "Printer cover open" until it's ready.
   An optional password (Settings tab) protects the page; if one is set and
   the login has expired, any API call answers 401 and we go to /login.
   Everything saved (presets, details, trips, icons) lives on the server in
@@ -589,15 +589,21 @@ function showPrinterState() {
     text.textContent = printerState.media ? `${msg} · ${printerState.media}` : msg;
     $("pstate-retry").hidden = true;
   } else if (printerState) {
-    box.className = "pstate bad"; text.textContent = printerState.message || "Printer unavailable";
+    box.className = "pstate bad";
+    // For the wrong roll, say which roll the printer found
+    text.textContent = (printerState.message || "Printer unavailable") +
+      (printerState.state === "wrong_media" && printerState.media ? ` · ${printerState.media} loaded` : "");
     $("pstate-retry").hidden = false;
     $("pstate-retry").textContent = printerChecking ? "Checking…" : "Check again";
   }
   $("pstate-retry").disabled = printerChecking;
   showPrintButton();
 }
-// Ask the server to check the printer. While there's a problem, check
-// again every 30 seconds (only while the page is on screen).
+// Ask the server to check the printer, then check again regularly while
+// the page is on screen: every minute while all is well (a heartbeat, so a
+// printer switched off or a cover opened is noticed), every 30 seconds
+// while there's a problem (so it clears itself once fixed). Hidden pages
+// (another tab, phone locked) don't check; they check on coming back.
 async function checkPrinter() {
   if (locked || printerChecking) return;
   clearTimeout(printerTimer);
@@ -607,7 +613,7 @@ async function checkPrinter() {
   printerState = res.body && res.body.state ? res.body
     : { ok: false, state: "unavailable", message: res.body.message || "Can't reach the label service" };
   showPrinterState();
-  if (!printerState.ok) printerTimer = setTimeout(() => { if (!document.hidden) checkPrinter(); }, 30000);
+  printerTimer = setTimeout(() => { if (!document.hidden) checkPrinter(); }, printerState.ok ? 60000 : 30000);
 }
 $("pstate-retry").addEventListener("click", checkPrinter);
 // Phones keep pages open for a long time: check again when it comes back into view
