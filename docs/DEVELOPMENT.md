@@ -3,7 +3,7 @@
 Read this before changing the code. It explains what we're building, the decisions already made
 and the constraints that aren't obvious from the code.
 
-_Last updated: 2026-11-09 19:00 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Last updated: 2026-11-09 19:20 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 ---
 
@@ -278,6 +278,9 @@ image is valid for a model (it raises if the size is wrong).
   read into the flight boxes for checking, then added.
 - 2026-11-08 – Accent colour choice in Settings (green default; blue, red,
   pink, purple, orange, monochrome), each tuned for light and dark themes.
+- 2026-11-09 – Icon list order: None, then the user's icons, then
+  built-ins, each alphabetical, under "Your icons" / "Built-in icons"
+  headings (user icons first: few, and the ones chosen on purpose).
 - 2026-11-09 – Address label: a name that would shrink below 56 dots
   beside the icon moves across the full width on top, with the icon
   (130–190 dots, matching the address height) beside the address only.

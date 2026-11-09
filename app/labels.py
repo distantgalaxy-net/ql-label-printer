@@ -1,6 +1,6 @@
 # ------------------------------------------------------------------
 # labelprinter - label layouts
-# Date: 2026-11-09 16:30 GMT (updated; first written 2026-11-07 18:10 GMT)
+# Date: 2026-11-09 19:20 GMT (updated; first written 2026-11-07 18:10 GMT)
 # Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
 #
 # Turns form data into a black-and-white image the exact width of the
@@ -530,14 +530,15 @@ def _custom_names():
 
 
 def list_icons():
-    """All icons for the page: custom ones first, then built-ins.
+    """All icons for the page: custom ones first, then built-ins, each group
+    in alphabetical order.
 
     Each entry is {"name", "custom"}. A custom icon with a built-in's name
     replaces that built-in; deleting it brings the built-in back.
     """
-    custom = _custom_names()
-    return ([{"name": n, "custom": True} for n in custom] +
-            [{"name": k, "custom": False} for k in BUILTIN_ICONS if k not in custom])
+    custom = sorted(_custom_names(), key=str.lower)
+    builtin = sorted((k for k in BUILTIN_ICONS if k not in custom), key=str.lower)
+    return [{"name": n, "custom": True} for n in custom] + [{"name": k, "custom": False} for k in builtin]
 
 
 def load_icon(name, size):

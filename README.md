@@ -3,7 +3,7 @@
 Print useful labels on a Brother QL label printer from your phone or from
 Home Assistant.
 
-_Updated: 2026-11-09 19:00 GMT · Developer: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Updated: 2026-11-09 19:20 GMT · Developer: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 A small self-hosted web service, run in Docker (for example on a Synology
 NAS). It prints on a network-connected Brother QL printer from a
@@ -282,6 +282,9 @@ Long names stay readable: if a name would have to shrink to fit beside
 the icon, it goes across the full width on top with the icon beside the
 address, and a very long name is split over two lines. They're drawn by the app's own code (no image files or
 third-party artwork).
+
+The Icon list shows **None**, then **Your icons**, then **Built-in
+icons**, each in alphabetical order.
 
 To add your own, open **Address → Your own icons**, give it a name and
 choose a picture (PNG, JPEG, GIF, WebP or BMP, up to 10 MB). It's trimmed,

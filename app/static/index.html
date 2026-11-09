@@ -1,7 +1,7 @@
 <!doctype html>
 <!--
   labelprinter - label printing page (phone-first)
-  Date: 2026-11-09 18:50 GMT (updated; first written 2026-11-07 18:15 GMT)
+  Date: 2026-11-09 19:20 GMT (updated; first written 2026-11-07 18:15 GMT)
   Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
   One form per label type; the preview updates as you type, then Print.
   The Settings tab holds the printer (model, IP address, port), the time
@@ -914,10 +914,19 @@ $("c-file").addEventListener("change", e => { importContactFile(e.target.files[0
 const titleCase = (n) => n.charAt(0).toUpperCase() + n.slice(1);
 const iconUrl = (n) => `/api/icons/${encodeURIComponent(n)}?v=${Date.now()}`;
 // Fill the Icon dropdown and the "Your own icons" list from `icons`
+// Dropdown order: None, then "Your icons", then "Built-in icons", each
+// group alphabetical (the server sends them in that order)
 function fillIcons(select) {
   const sel = $("a-icon"), keep = select ?? sel.value;
-  sel.length = 1;
-  icons.forEach(i => sel.add(new Option(titleCase(i.name) + (i.custom ? " (yours)" : ""), i.name)));
+  sel.textContent = "";
+  sel.add(new Option("None", "none"));
+  for (const [label, custom] of [["Your icons", true], ["Built-in icons", false]]) {
+    const group = icons.filter(i => i.custom === custom);
+    if (!group.length) continue;
+    const og = document.createElement("optgroup"); og.label = label;
+    group.forEach(i => og.append(new Option(titleCase(i.name), i.name)));
+    sel.append(og);
+  }
   sel.value = icons.some(i => i.name === keep) ? keep : "none";
   showIconThumb();
   const list = $("i-list"); list.textContent = "";
