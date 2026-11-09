@@ -3,7 +3,7 @@
 Print useful labels on a Brother QL label printer from your phone or from
 Home Assistant.
 
-_Updated: 2026-11-09 19:40 GMT · Developer: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Updated: 2026-11-09 20:00 GMT · Developer: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 A small self-hosted web service, run in Docker (for example on a Synology
 NAS). It prints on a network-connected Brother QL printer from a
@@ -366,8 +366,8 @@ Fields:
 
 ## Ideas for later
 
-Address lookup from Google Contacts · guest Wi-Fi vouchers from UniFi as QR
-labels · picking network and battery devices from Home Assistant.
+Guest Wi-Fi vouchers from UniFi as QR labels · picking network and battery
+devices from Home Assistant.
 
 ## Licence
 

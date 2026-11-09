@@ -3,7 +3,7 @@
 Read this before changing the code. It explains what we're building, the decisions already made
 and the constraints that aren't obvious from the code.
 
-_Last updated: 2026-11-09 19:40 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Last updated: 2026-11-09 20:00 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 ---
 
@@ -24,8 +24,9 @@ AB1 2CD", `192.168.1.20`, `labels.home.example`).
 
 **Built:**
 - Flask web page + JSON API, rendered with Pillow, printed with `brother_ql_next`.
-- Label types: `address` (optional icon; custom icons uploaded/deleted in
-  the page), `food` (freezer/fridge/cupboard, use-by in days or months,
+- Label types: `address` (optional icon – 18 built-ins drawn in code, plus
+  the user's own uploaded/deleted in the page, names must be new; long
+  names move above the icon or wrap onto two lines), `food` (freezer/fridge/cupboard, use-by in days or months,
   cooking instructions, notes, presets; `freezer` is an API alias),
   `travel` (saved details shown locked with Edit/Clear; flights built one
   by one or pasted, sorted, split into journeys; saved trips), `battery`
@@ -77,8 +78,8 @@ AB1 2CD", `192.168.1.20`, `labels.home.example`).
   check says ready. A printer that ignores `ESC i S` is remembered for an
   hour so checks go straight to SNMP. `/api/print` also checks just before
   sending (under the job lock) and refuses with 409 + `printer` if the
-  printer reports a problem; printers with unknown status print as before. Home Assistant
-  printing isn't blocked by it. **Verified on a QL-810W:** no reply to
+  printer reports a problem (from the page or Home Assistant); printers
+  with unknown status print as before. **Verified on a QL-810W:** no reply to
   `ESC i S` over Wi-Fi; SNMP works (alert 3 = cover open, 808 = no roll,
   media name e.g. `62mm / 2.4"` or `29mm x 90mm / 1.1" x 3.5"`). Needs
   UDP 161 allowed through any firewall. Settings → Check printer shows the
@@ -94,11 +95,15 @@ AB1 2CD", `192.168.1.20`, `labels.home.example`).
   signed session cookie (30 days) for browsers, HTTP Basic auth for scripts.
 
 **Ideas, not started yet:**
-- Address lookup from Google Contacts (People API) for computers, where
-  the browser contact picker isn't available.
 - Guest Wi-Fi: per-guest UniFi hotspot vouchers printed as QR/code labels.
 - Pick network devices and battery devices from Home Assistant (battery
   labels must still work for devices not in HA).
+
+**Decided against (for now):** live contact lookups (Google People API,
+iCloud/CardDAV). Google needs every installer to set up a Cloud project
+and OAuth (with a 7-day token limit in testing mode); CardDAV means
+storing account passwords. Contact-card import plus the Android picker
+covers every device without either.
 
 ## Hard constraints
 
@@ -191,7 +196,7 @@ automatically.
   release number (e.g. `1.2.0`) in the pull request, then publish a GitHub
   release tagged `v1.2.0`. The publish workflow refuses a tag that doesn't
   match `app/VERSION`. The next test build after `1.2.0` is `1.2.1`.
-- Released so far: v1.0.0, v1.1.0.
+- Released so far: v1.0.0, v1.1.0, v1.2.0.
 
 ## Coding conventions
 
@@ -278,6 +283,8 @@ image is valid for a model (it raises if the size is wrong).
   read into the flight boxes for checking, then added.
 - 2026-11-08 – Accent colour choice in Settings (green default; blue, red,
   pink, purple, orange, monochrome), each tuned for light and dark themes.
+- 2026-11-09 – v1.2.0: everything from 1.1.1–1.1.15 (food labels, custom
+  icons, flight builder, colours, contacts, printer status, new icons).
 - 2026-11-09 – Icon uploads must use a new name: one already used by the
   user's icons or a built-in is refused (no silent replacing; delete first).
 - 2026-11-09 – Icon list order: None, then the user's icons, then
