@@ -3,7 +3,7 @@
 Read this before changing the code. It explains what we're building, the decisions already made
 and the constraints that aren't obvious from the code.
 
-_Last updated: 2026-11-09 10:05 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Last updated: 2026-11-09 10:45 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 ---
 
@@ -154,6 +154,7 @@ app/status.py      Printer ready? Roll loaded? (connection, ESC i S, SNMP)
 app/static/index.html  Phone-first page (vanilla JS, no build step)
 app/static/login.html  Password page (only used when a password is set)
 app/static/theme.css   Accent colour shades (light + dark) and swatches
+app/VERSION        The version number (see Versions)
 Dockerfile, .dockerignore, docker-compose.yml, requirements.txt (pinned)
 .github/workflows/docker-publish.yml   Docker Hub build (multi-arch)
 ```
@@ -170,6 +171,19 @@ starts a new journey. The page mirrors this for its list.
 Adding a label type = a function in `labels.py` registered in `RENDERERS`,
 plus a `<form data-kind="...">` and tab in `index.html`. The API picks it up
 automatically.
+
+## Versions
+
+- The version lives in **`app/VERSION`** (one line, e.g. `1.1.1`). It's
+  shown at the top of the Settings tab, in `/health` and in the log at
+  start-up.
+- **Test builds:** every set of changes pushed for testing adds one to the
+  last number (1.1.1 → 1.1.2 …). Bump it in the same commit as the change.
+- **Releases:** the owner decides minor or major. Set `app/VERSION` to the
+  release number (e.g. `1.2.0`) in the pull request, then publish a GitHub
+  release tagged `v1.2.0`. The publish workflow refuses a tag that doesn't
+  match `app/VERSION`. The next test build after `1.2.0` is `1.2.1`.
+- Released so far: v1.0.0, v1.1.0.
 
 ## Coding conventions
 

@@ -3,7 +3,7 @@
 Print useful labels on a Brother QL label printer from your phone or from
 Home Assistant.
 
-_Updated: 2026-11-09 10:05 GMT · Developer: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Updated: 2026-11-09 10:45 GMT · Developer: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 A small self-hosted web service, run in Docker (for example on a Synology
 NAS). It prints on a network-connected Brother QL printer from a
@@ -248,8 +248,11 @@ Releases are listed on the GitHub **Releases** page. Your settings in
 The GitHub workflow `.github/workflows/docker-publish.yml` builds the image
 for amd64 and arm64 and pushes it to Docker Hub:
 
-- **Release:** GitHub → **Releases → Draft a new release**, create a tag
-  like `v1.0.0`, publish. The image is tagged `1.0.0`, `1.0` and `latest`.
+- **Release:** set `app/VERSION` to the new number (e.g. `1.2.0`) and merge
+  it, then GitHub → **Releases → Draft a new release**, create the tag
+  `v1.2.0`, publish. The image is tagged `1.2.0`, `1.2` and `latest`. The
+  workflow refuses to publish if the tag doesn't match `app/VERSION`.
+- **Which version is running:** shown at the top of the **Settings** tab.
 - **Test build:** **Actions → Publish Docker image → Run workflow** builds
   the chosen branch and tags it with the branch name (e.g. `main`), without
   touching `latest`.

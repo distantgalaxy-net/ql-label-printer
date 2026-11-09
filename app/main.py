@@ -1,6 +1,6 @@
 # ------------------------------------------------------------------
 # labelprinter - label print service (web page + API)
-# Date: 2026-11-09 09:40 GMT (updated; first written 2026-11-07 18:10 GMT)
+# Date: 2026-11-09 10:40 GMT (updated; first written 2026-11-07 18:10 GMT)
 # Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
 #
 # Serves the phone-friendly web page and a small JSON API:
@@ -17,7 +17,7 @@
 #   POST /api/print/<kind>      print it  -> {"ok": bool, "message": str}
 #   POST /api/printer/test      check the printer can be reached (no print)
 #   GET  /api/printer/status    is it ready, and which roll is loaded? (no print)
-#   GET  /api/options           printer models and time zones
+#   GET  /api/options           printer models, time zones and the app version
 #   GET  /login, POST /api/login, POST /api/logout   optional password
 #   PUT  /api/password          set, change or remove the password
 # <kind> is address | food | travel | battery | network
@@ -52,6 +52,22 @@ from auth import Auth, session_lifetime
 DATA_DIR = os.environ.get("DATA_DIR", "/data")
 SETTINGS_FILE = os.path.join(DATA_DIR, "settings.json")
 STATIC = os.path.join(os.path.dirname(__file__), "static")
+
+
+def read_version():
+    """The app's version from the VERSION file next to this one (e.g. "1.1.1").
+
+    Test builds add one to the last number; releases are tagged with the
+    same number (the Docker Hub workflow checks they match).
+    """
+    try:
+        with open(os.path.join(os.path.dirname(__file__), "VERSION"), encoding="utf-8") as fh:
+            return fh.readline().strip() or "unknown"
+    except OSError:
+        return "unknown"
+
+
+APP_VERSION = read_version()
 
 # Starting settings, written on first run; everything is editable in the page
 DEFAULT_SETTINGS = {
@@ -296,8 +312,8 @@ def put_settings():
 
 @app.get("/api/options")
 def options():
-    """Choices for the Settings tab: printer models and time zone names."""
-    return jsonify({"models": printer.supported_models(), "timezones": TIMEZONES})
+    """Choices for the Settings tab: printer models, time zone names and the version."""
+    return jsonify({"models": printer.supported_models(), "timezones": TIMEZONES, "version": APP_VERSION})
 
 
 @app.get("/api/icons")
@@ -451,8 +467,8 @@ def get_printer_status():
 
 @app.get("/health")
 def health():
-    """Health check used by the Docker HEALTHCHECK."""
-    return jsonify({"ok": True})
+    """Health check used by the Docker HEALTHCHECK (also says which version is running)."""
+    return jsonify({"ok": True, "version": APP_VERSION})
 
 
 if __name__ == "__main__":
@@ -462,4 +478,5 @@ if __name__ == "__main__":
     if auth.reset_from_env():
         print("RESET_PASSWORD is set: the password has been removed. "
               "Take RESET_PASSWORD out of docker-compose.yml now.", flush=True)
+    print(f"LabelPrinter {APP_VERSION} starting", flush=True)
     serve(app, host="0.0.0.0", port=int(os.environ.get("PORT", "8013")))

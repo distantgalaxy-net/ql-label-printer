@@ -1,7 +1,7 @@
 <!doctype html>
 <!--
   labelprinter - label printing page (phone-first)
-  Date: 2026-11-09 09:50 GMT (updated; first written 2026-11-07 18:15 GMT)
+  Date: 2026-11-09 10:40 GMT (updated; first written 2026-11-07 18:15 GMT)
   Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
   One form per label type; the preview updates as you type, then Print.
   The Settings tab holds the printer (model, IP address, port), the time
@@ -355,6 +355,7 @@
 
     <!-- Settings: not a label, so the preview and Print button are hidden on this tab -->
     <form data-kind="settings" hidden>
+      <p class="small" id="s-version">Version …</p>
       <p class="info" id="s-welcome" hidden><strong>Welcome!</strong> Set up your printer to get started. Tap <strong>Test and save</strong>: it checks it can reach the printer, then unlocks the label tabs.</p>
       <h2>Printer</h2>
       <p class="small">Where to send labels. The printer needs a fixed IP address (set a DHCP reservation in your router) and must accept raw printing on the port below. Only the 62mm continuous roll (DK-22205) is supported.</p>
@@ -1343,6 +1344,8 @@ async function init() {
   try { opts = await (await fetch("/api/options")).json(); } catch (e) {}
   (opts.models || []).forEach(m => $("s-model").add(new Option(`${m.id}${m.min_length_mm > 13 ? ` (labels at least ${Math.round(m.min_length_mm)}mm)` : ""}`, m.id)));
   (opts.timezones || []).forEach(z => $("s-tz").add(new Option(z.replace(/_/g, " "), z)));
+  // Which build is running, so test copies are easy to tell apart
+  $("s-version").textContent = `LabelPrinter version ${opts.version || "unknown"}`;
   try { icons = await (await fetch("/api/icons")).json(); } catch (e) { icons = []; }
   fillIcons("none");
   setUpContacts();
