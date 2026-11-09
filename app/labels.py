@@ -1,6 +1,6 @@
 # ------------------------------------------------------------------
 # labelprinter - label layouts
-# Date: 2026-11-09 15:30 GMT (updated; first written 2026-11-07 18:10 GMT)
+# Date: 2026-11-09 16:20 GMT (updated; first written 2026-11-07 18:10 GMT)
 # Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
 #
 # Turns form data into a black-and-white image the exact width of the
@@ -442,13 +442,44 @@ def _dotted_burst(d, cx, cy, r, rays, dots, size):
 
 
 def _icon_fireworks(d):
-    """Fireworks: a big dotted burst with a fine trail curving up into it, a
-    smaller burst and a sparkle."""
-    trail = [(96 + 104 * t ** 1.6, 506 - 128 * t) for t in (i / 30 for i in range(31))]
-    _round_line(d, trail, 9)
-    _dotted_burst(d, 200, 210, 180, 14, 4, 13)           # big burst
+    """Fireworks: a big dotted burst, a smaller burst and a sparkle, with the
+    rocket's trail shooting straight up from the bottom towards the big
+    burst's centre and stopping just short of it (so it reads as a rocket
+    that has burst, not a flower on a stem)."""
+    cx, cy, r = 200, 196, 172                            # big burst
+    _dotted_burst(d, cx, cy, r, 14, 4, 13)
     _dotted_burst(d, 410, 380, 92, 10, 3, 10)            # smaller burst
-    _sparkle(d, 430, 120, 36)
+    _sparkle(d, 430, 112, 36)
+    _round_line(d, [(cx, 506), (cx, cy + r + 44)], 9)    # trail: straight up, directly below the centre
+
+
+def _icon_sunshine(d):
+    """Sunshine: a bold ring with a solid centre, and twelve rounded rays, long and short."""
+    import math
+    cx = cy = 256
+    d.ellipse((cx - 104, cy - 104, cx + 104, cy + 104), outline=0, width=LW)
+    d.ellipse((cx - 60, cy - 60, cx + 60, cy + 60), fill=0)
+    for k in range(12):
+        a = math.radians(k * 30)
+        outer = 236 if k % 2 == 0 else 196               # alternate long and short rays
+        _round_line(d, [(cx + 142 * math.cos(a), cy + 142 * math.sin(a)),
+                        (cx + outer * math.cos(a), cy + outer * math.sin(a))], 30)
+
+
+def _icon_car(d):
+    """Car from the side, facing right: solid body, white windows and lights,
+    wheels set into white arches."""
+    d.rounded_rectangle((40, 250, 472, 372), radius=40, fill=0)         # lower body
+    d.polygon([(130, 262), (184, 160), (330, 160), (396, 262)], fill=0) # cabin
+    d.rounded_rectangle((170, 150, 340, 190), radius=24, fill=0)        # rounded roof
+    d.polygon([(166, 252), (204, 186), (250, 186), (250, 252)], fill=255)   # windows,
+    d.polygon([(270, 252), (270, 186), (318, 186), (366, 252)], fill=255)   # split by a pillar
+    d.rounded_rectangle((436, 278, 466, 300), radius=8, fill=255)       # headlight
+    d.rounded_rectangle((44, 278, 64, 298), radius=6, fill=255)         # rear light
+    for wx in (146, 366):                                               # wheels
+        d.ellipse((wx - 70, 302, wx + 70, 442), fill=255)               # white arch
+        d.ellipse((wx - 54, 318, wx + 54, 426), fill=0)                 # tyre
+        d.ellipse((wx - 18, 354, wx + 18, 390), fill=255)               # hub
 
 
 def _icon_house(d):
@@ -464,7 +495,7 @@ BUILTIN_ICONS = {
     "balloon": _icon_balloon, "wedding": _icon_wedding, "new home": _icon_house,
     "get well": _icon_get_well, "good luck": _icon_good_luck, "horseshoe": _icon_horseshoe,
     "flowers": _icon_flowers, "snowman": _icon_snowman, "snowflake": _icon_snowflake,
-    "fireworks": _icon_fireworks,
+    "fireworks": _icon_fireworks, "sunshine": _icon_sunshine, "car": _icon_car,
 }
 
 
