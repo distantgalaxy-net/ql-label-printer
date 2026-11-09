@@ -1,6 +1,6 @@
 # ------------------------------------------------------------------
 # labelprinter - label layouts
-# Date: 2026-11-09 12:40 GMT (updated; first written 2026-11-07 18:10 GMT)
+# Date: 2026-11-09 13:10 GMT (updated; first written 2026-11-07 18:10 GMT)
 # Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
 #
 # Turns form data into a black-and-white image the exact width of the
@@ -327,6 +327,41 @@ def _icon_flowers(d):
     d.rounded_rectangle((218, 372, 294, 412), radius=10, fill=0)   # the band
 
 
+def _icon_snowman(d):
+    """Snowman: body and head, top hat, scarf, face, buttons and stick arms."""
+    d.ellipse((136, 236, 376, 476), outline=0, width=LW)            # body
+    d.ellipse((181, 106, 331, 256), fill=255, outline=0, width=LW)  # head, in front of the body
+    d.rectangle((196, 30, 316, 112), fill=0)                       # hat
+    d.rectangle((166, 100, 346, 124), fill=0)                      # hat brim
+    for x in (230, 282):                                            # eyes
+        d.ellipse((x - 13, 160, x + 13, 186), fill=0)
+    d.arc((222, 172, 290, 226), 30, 150, fill=0, width=10)          # smile
+    d.rounded_rectangle((176, 240, 336, 274), radius=12, fill=0)    # scarf round the neck
+    d.polygon([(286, 262), (322, 262), (330, 336), (296, 330)], fill=0)   # scarf end
+    for y in (330, 380, 428):                                       # buttons
+        d.ellipse((243, y - 13, 269, y + 13), fill=0)
+    for side in (-1, 1):                                            # stick arms with a twig each
+        d.line([(256 + side * 106, 320), (256 + side * 186, 260)], fill=0, width=18)
+        d.line([(256 + side * 160, 280), (256 + side * 176, 236)], fill=0, width=14)
+
+
+def _icon_snowflake(d):
+    """Snowflake: six arms, each with two pairs of side branches."""
+    import math
+    cx, cy, arm = 256, 256, 220
+    for k in range(6):
+        a = math.radians(90 + k * 60)
+        ex, ey = cx + arm * math.cos(a), cy + arm * math.sin(a)
+        d.line([(cx, cy), (ex, ey)], fill=0, width=30)
+        for along, length in ((0.45, 70), (0.72, 52)):          # side branches, angled outwards
+            bx, by = cx + arm * along * math.cos(a), cy + arm * along * math.sin(a)
+            for turn in (-50, 50):
+                b = a + math.radians(turn)
+                d.line([(bx, by), (bx + length * math.cos(b), by + length * math.sin(b))], fill=0, width=24)
+        d.ellipse((ex - 17, ey - 17, ex + 17, ey + 17), fill=0)  # rounded tips
+    d.ellipse((cx - 40, cy - 40, cx + 40, cy + 40), fill=0)       # centre
+
+
 def _icon_house(d):
     """New home: house outline with a door."""
     d.polygon([(256, 60), (50, 250), (462, 250)], outline=0, width=LW)
@@ -339,7 +374,7 @@ BUILTIN_ICONS = {
     "celebration": _icon_celebration, "heart": _icon_heart, "star": _icon_star,
     "balloon": _icon_balloon, "wedding": _icon_wedding, "new home": _icon_house,
     "get well": _icon_get_well, "good luck": _icon_good_luck, "horseshoe": _icon_horseshoe,
-    "flowers": _icon_flowers,
+    "flowers": _icon_flowers, "snowman": _icon_snowman, "snowflake": _icon_snowflake,
 }
 
 
