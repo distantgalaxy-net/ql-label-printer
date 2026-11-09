@@ -1,6 +1,6 @@
 # ------------------------------------------------------------------
 # labelprinter - label layouts
-# Date: 2026-11-09 14:40 GMT (updated; first written 2026-11-07 18:10 GMT)
+# Date: 2026-11-09 15:30 GMT (updated; first written 2026-11-07 18:10 GMT)
 # Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
 #
 # Turns form data into a black-and-white image the exact width of the
@@ -360,22 +360,47 @@ def _icon_flowers(d):
     d.rounded_rectangle((218, 372, 294, 412), radius=10, fill=0)   # the band
 
 
+def _round_line(d, points, width):
+    """A line through points with rounded ends (and rounded joins)."""
+    d.line(points, fill=0, width=width, joint="curve")
+    for x, y in (points[0], points[-1]):
+        d.ellipse((x - width / 2, y - width / 2, x + width / 2, y + width / 2), fill=0)
+
+
+def _dot(d, x, y, r):
+    """A solid dot of radius r."""
+    d.ellipse((x - r, y - r, x + r, y + r), fill=0)
+
+
 def _icon_snowman(d):
-    """Snowman: round head on a tall oval body, thin outlines, simple face,
-    carrot nose, scarf, buttons and twig arms."""
-    cx, line = 256, 20                                   # centre line, outline width
-    for side in (-1, 1):                                 # twig arms, behind the body
-        d.line([(cx + side * 84, 300), (cx + side * 206, 222)], fill=0, width=16)
-        d.line([(cx + side * 170, 246), (cx + side * 178, 198)], fill=0, width=12)
-    d.ellipse((cx - 106, 178, cx + 106, 496), fill=255, outline=0, width=line)   # body: tall oval
-    d.ellipse((cx - 76, 30, cx + 76, 182), fill=255, outline=0, width=line)     # head
-    for x in (cx - 28, cx + 22):                         # eyes
-        d.ellipse((x - 11, 86, x + 11, 108), fill=0)
-    d.polygon([(cx - 2, 118), (cx - 2, 142), (cx + 72, 134)], fill=0)   # carrot nose
-    d.rounded_rectangle((cx - 78, 170, cx + 78, 198), radius=12, fill=0)    # scarf
-    d.polygon([(cx - 64, 186), (cx - 34, 186), (cx - 38, 262), (cx - 68, 258)], fill=0)   # scarf tail
-    for y in (270, 330, 390):                            # buttons
-        d.ellipse((cx - 12, y - 12, cx + 12, y + 12), fill=0)
+    """Snowman in a clean line style: the body's outline stops where it meets
+    the head (no overlapping circles), even rounded lines, stick arms with a
+    forked hand, two buttons, a face, a scarf and a short ground line."""
+    import math
+    w = 30                                               # line width
+    hx, hy, hr = 256, 128, 80                            # head
+    bx, by, br = 256, 318, 140                           # body
+    d.ellipse((hx - hr, hy - hr, hx + hr, hy + hr), outline=0, width=w)
+    # Body: only the part of its circle outside the head. Find where the two
+    # circles meet and draw the arc round the bottom between those points.
+    dist = by - hy
+    a = (br * br - hr * hr + dist * dist) / (2 * dist)   # from body centre up to the meeting line
+    h = math.sqrt(max(br * br - a * a, 0))               # half the width of the meeting line
+    start = math.degrees(math.atan2(-a, h)) % 360        # right meeting point (PIL angles)
+    end = math.degrees(math.atan2(-a, -h)) % 360         # left meeting point
+    d.arc((bx - br, by - br, bx + br, by + br), start, end + 360 if end < start else end, fill=0, width=w)
+    for side in (-1, 1):                                 # stick arms with a forked hand
+        ex, ey = bx + side * 196, 196
+        _round_line(d, [(bx + side * 112, 262), (ex, ey)], 24)
+        _round_line(d, [(ex - side * 6, ey - 44), (ex, ey), (ex + side * 44, ey + 4)], 20)
+    for y in (300, 376):                                 # buttons
+        _dot(d, bx, y, 17)
+    _round_line(d, [(86, 478), (426, 478)], w)           # ground
+    _dot(d, hx - 26, hy - 12, 12)                        # eyes
+    _dot(d, hx + 26, hy - 12, 12)
+    d.polygon([(hx - 6, hy + 14), (hx - 6, hy + 34), (hx + 46, hy + 26)], fill=0)   # carrot nose
+    _round_line(d, [(hx - 74, hy + 82), (hx, hy + 96), (hx + 74, hy + 82)], 26)     # scarf
+    _round_line(d, [(hx + 40, hy + 92), (hx + 56, hy + 150)], 24)                    # scarf tail
 
 
 def _icon_snowflake(d):
@@ -395,28 +420,35 @@ def _icon_snowflake(d):
     d.ellipse((cx - 40, cy - 40, cx + 40, cy + 40), fill=0)       # centre
 
 
-def _burst(d, cx, cy, r, rays, width, dot):
-    """One firework burst: rays from near the centre, alternately long and short,
-    each ending in a dot."""
+def _sparkle(d, cx, cy, r):
+    """A small four-pointed sparkle."""
+    import math
+    pts = []
+    for i in range(8):
+        rr = r if i % 2 == 0 else r * 0.32
+        a = math.radians(-90 + i * 45)
+        pts.append((cx + rr * math.cos(a), cy + rr * math.sin(a)))
+    d.polygon(pts, fill=0)
+
+
+def _dotted_burst(d, cx, cy, r, rays, dots, size):
+    """A firework burst made of rays of dots, the dots growing towards the edge."""
     import math
     for k in range(rays):
         a = math.radians(k * 360 / rays - 90)
-        inner, outer = r * 0.30, (r if k % 2 == 0 else r * 0.78)
-        x2, y2 = cx + outer * math.cos(a), cy + outer * math.sin(a)
-        d.line([(cx + inner * math.cos(a), cy + inner * math.sin(a)), (x2, y2)], fill=0, width=width)
-        d.ellipse((x2 - dot, y2 - dot, x2 + dot, y2 + dot), fill=0)
+        for j in range(dots):
+            t = 0.35 + 0.65 * j / (dots - 1)
+            _dot(d, cx + r * t * math.cos(a), cy + r * t * math.sin(a), size * (0.7 + 0.5 * t))
 
 
 def _icon_fireworks(d):
-    """Fireworks: a big burst, two smaller ones, and a dashed rocket trail rising to the big one."""
-    _burst(d, 210, 200, 160, 16, 18, 14)                 # big burst
-    _burst(d, 410, 120, 80, 12, 12, 9)                   # small burst, top right
-    _burst(d, 420, 330, 62, 10, 11, 8)                   # smaller burst, right
-    x0, y0, x1, y1 = 150, 500, 196, 300                  # trail: bottom up towards the big burst
-    for t0 in (0.0, 0.3, 0.6):
-        t1 = t0 + 0.18
-        d.line([(x0 + (x1 - x0) * t0, y0 + (y1 - y0) * t0), (x0 + (x1 - x0) * t1, y0 + (y1 - y0) * t1)],
-               fill=0, width=14)
+    """Fireworks: a big dotted burst with a fine trail curving up into it, a
+    smaller burst and a sparkle."""
+    trail = [(96 + 104 * t ** 1.6, 506 - 128 * t) for t in (i / 30 for i in range(31))]
+    _round_line(d, trail, 9)
+    _dotted_burst(d, 200, 210, 180, 14, 4, 13)           # big burst
+    _dotted_burst(d, 410, 380, 92, 10, 3, 10)            # smaller burst
+    _sparkle(d, 430, 120, 36)
 
 
 def _icon_house(d):
