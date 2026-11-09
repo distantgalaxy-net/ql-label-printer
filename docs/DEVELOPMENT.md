@@ -3,7 +3,7 @@
 Read this before changing the code. It explains what we're building, the decisions already made
 and the constraints that aren't obvious from the code.
 
-_Last updated: 2026-11-09 10:45 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Last updated: 2026-11-09 11:10 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 ---
 
@@ -207,6 +207,28 @@ cd app && DATA_DIR=/tmp/dd PORT=8013 ../.venv/bin/python main.py
 # open http://127.0.0.1:8013 - Settings needs a reachable printer to save;
 # a tiny TCP listener on a spare local port works as a stand-in.
 ```
+
+**Test copy on a Synology NAS (no command line):** download the branch
+as a ZIP (`https://github.com/<owner>/ql-label-printer/archive/refs/heads/<branch>.zip`),
+copy the *contents* of its top folder into e.g. `docker/ql-label-printer-test`,
+and create a Container Manager project there with:
+
+```yaml
+services:
+  labelprinter-test:
+    build: .
+    pull_policy: build              # rebuild from the code every time
+    container_name: labelprinter-test
+    ports:
+      - "127.0.0.1:8014:8013"       # behind an HTTPS reverse proxy entry
+    volumes:
+      - ./data:/data
+```
+
+`pull_policy: build` matters: without it, Container Manager's **Build**
+reuses the image it built last time and the old code keeps running. After
+updating the files: Action → Stop, then Action → Build. The version at the
+top of Settings (or `/health`) confirms which build is running.
 
 `printer.build(image, model)` converts without sending – use it to prove an
 image is valid for a model (it raises if the size is wrong).
