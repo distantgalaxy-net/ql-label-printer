@@ -1,6 +1,6 @@
 # ------------------------------------------------------------------
 # labelprinter - label layouts
-# Date: 2026-11-09 16:20 GMT (updated; first written 2026-11-07 18:10 GMT)
+# Date: 2026-11-09 16:30 GMT (updated; first written 2026-11-07 18:10 GMT)
 # Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
 #
 # Turns form data into a black-and-white image the exact width of the
@@ -442,15 +442,22 @@ def _dotted_burst(d, cx, cy, r, rays, dots, size):
 
 
 def _icon_fireworks(d):
-    """Fireworks: a big dotted burst, a smaller burst and a sparkle, with the
-    rocket's trail shooting straight up from the bottom towards the big
-    burst's centre and stopping just short of it (so it reads as a rocket
-    that has burst, not a flower on a stem)."""
-    cx, cy, r = 200, 196, 172                            # big burst
-    _dotted_burst(d, cx, cy, r, 14, 4, 13)
+    """Fireworks: a big dotted burst with a fine straight trail rising into
+    it (aimed at its centre, between two rays of dots), a smaller burst and
+    a sparkle."""
+    import math
+    cx, cy, r, rays = 200, 210, 180, 14                  # big burst
+    # The trail is a straight streak rising from the bottom of the icon
+    # along a line through the burst's centre. The line sits halfway between
+    # two rays, so the trail slips in between the dots, and it stops a
+    # little short of the centre.
+    a = math.radians(-90 + 360 / rays * 7.5)             # between rays 7 and 8 (just left of straight down)
+    ux, uy = math.cos(a), math.sin(a)
+    reach = (508 - cy) / uy                              # distance from the centre to the bottom edge
+    _round_line(d, [(cx + ux * reach, cy + uy * reach), (cx + ux * 112, cy + uy * 112)], 9)
+    _dotted_burst(d, cx, cy, r, rays, 4, 13)
     _dotted_burst(d, 410, 380, 92, 10, 3, 10)            # smaller burst
-    _sparkle(d, 430, 112, 36)
-    _round_line(d, [(cx, 506), (cx, cy + r + 44)], 9)    # trail: straight up, directly below the centre
+    _sparkle(d, 430, 120, 36)
 
 
 def _icon_sunshine(d):
