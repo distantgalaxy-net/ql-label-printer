@@ -139,8 +139,9 @@ IP address (e.g. your NAS's) to reach the printer on:
   roll. Without it you can still print, but the page can only tell whether
   the printer is reachable.
 
-In UniFi, set the rule's Connection State to **All** (not *Return
-Traffic*), so the host can start the conversation.
+Make sure the rule allows **new** connections from the host, not just
+replies: some firewalls only let return traffic through unless told
+otherwise.
 
 Then, if you like:
 
@@ -306,9 +307,9 @@ it). You can also copy black-on-white PNGs into `data/icons/` directly.
 | Message | Meaning |
 |---|---|
 | Setup isn't finished | Finish the **Settings** tab and tap **Test and save**. |
-| Couldn't reach the printer … timed out | Printer off, wrong IP in Settings, or a firewall between the host and the printer. Allow the host to reach the printer on TCP 9100 (in UniFi, set Connection State to **All**). |
+| Couldn't reach the printer … timed out | Printer off, wrong IP in Settings, or a firewall between the host and the printer. Allow the host to reach the printer on TCP 9100, including new connections (not just return traffic). |
 | Couldn't reach the printer … refused | Printer reachable but not accepting jobs. Check Editor Lite is off. |
-| *Printer connected* (or *Printer ready* with the cover open or no roll) | The printer isn't answering status checks. Allow **UDP 161** from the host to the printer in your firewall (Connection State **All** in UniFi), and in the printer's web settings (Network → Protocol → SNMP) use a mode with *v1/v2c read-only access*. Settings → **Printer status → Check printer** shows `"snmp": "(no reply)"` until it works. |
+| *Printer connected* (or *Printer ready* with the cover open or no roll) | The printer isn't answering status checks. Allow **UDP 161** from the host to the printer in your firewall (new connections, not just return traffic), and in the printer's web settings (Network → Protocol → SNMP) use a mode with *v1/v2c read-only access*. Settings → **Printer status → Check printer** shows `"snmp": "(no reply)"` until it works. |
 | Page won't load | Container not running, or your device isn't allowed by the reverse proxy. |
 | Asked for a password you don't know | See **Forgotten it?** above. |
 
@@ -375,7 +376,7 @@ Fields:
 
 ## Ideas for later
 
-Guest Wi-Fi vouchers from UniFi as QR labels · picking network and battery
+Guest Wi-Fi vouchers as QR labels · picking network and battery
 devices from Home Assistant.
 
 ## Licence
