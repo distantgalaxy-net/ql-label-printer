@@ -1,7 +1,7 @@
 <!doctype html>
 <!--
   labelprinter - label printing page (phone-first)
-  Date: 2026-11-09 02:00 GMT (updated; first written 2026-11-07 18:15 GMT)
+  Date: 2026-11-09 09:50 GMT (updated; first written 2026-11-07 18:15 GMT)
   Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
   One form per label type; the preview updates as you type, then Print.
   The Settings tab holds the printer (model, IP address, port), the time
@@ -11,6 +11,10 @@
   Settings tab works.
   The Print button sits directly under the label preview, and messages
   appear right next to the button that was pressed, so they can't be missed.
+  The printer is checked when the page opens (and after printing, when the
+  page comes back into view, and every 30 seconds while there's a
+  problem): Print is disabled with a message such as "Printer cover open"
+  until it's ready.
   An optional password (Settings tab) protects the page; if one is set and
   the login has expired, any API call answers 401 and we go to /login.
   Everything saved (presets, details, trips, icons) lives on the server in
@@ -121,7 +125,14 @@
   .printrow input { width: 70px; text-align: center; }
   .printrow button { flex: 1; font: inherit; font-weight: 600; border: 0; border-radius: 10px; padding: 12px;
     background: var(--accent); color: var(--accent-fg); cursor: pointer; }
-  .printrow button:disabled { opacity: .55; }
+  .printrow button:disabled { opacity: .55; cursor: not-allowed; }
+  /* Printer state under the Print button: quiet when ready, red when not */
+  .pstate { display: flex; align-items: center; gap: 10px; font-size: .88rem; color: var(--muted); margin: 0; }
+  .pstate .grow { flex: 1; }
+  .pstate.bad { color: var(--bad); background: var(--bad-bg); border: 1px solid var(--bad); border-radius: 8px; padding: 8px 10px; font-size: .92rem; }
+  .pstate.bad .grow::before { content: "⚠ "; font-weight: 700; }
+  pre.detail { margin: 0; padding: 10px; border-radius: 8px; background: var(--field); border: 1px solid var(--line);
+    font-size: .75rem; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 260px; overflow: auto; }
   [hidden] { display: none !important; }
   button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 </style>
@@ -148,6 +159,11 @@
       <button id="print" type="button">Print</button>
     </div>
     <p class="msg" id="msg-print" role="status"></p>
+    <!-- Printer state: "Printer ready · 62mm continuous", or the problem -->
+    <div class="pstate" id="pstate" role="status" hidden>
+      <span class="grow" id="pstate-text"></span>
+      <button type="button" class="btn2 mini" id="pstate-retry" hidden>Check again</button>
+    </div>
   </div>
 
   <div class="card">
@@ -358,6 +374,12 @@
       </div>
       <p class="msg" id="msg-settings" role="status"></p>
 
+      <h2>Printer status</h2>
+      <p class="small">Asks the printer whether it's ready and which roll is loaded (nothing is printed). The details show exactly what the printer replied.</p>
+      <div class="actions"><button type="button" class="btn2" id="s-status">Check printer</button></div>
+      <p class="msg" id="msg-status" role="status"></p>
+      <pre class="detail" id="s-status-detail" hidden></pre>
+
       <h2>Temperature unit</h2>
       <p class="small">Used for cooking temperatures on food labels. Saved straight away.</p>
       <div class="seg" role="radiogroup" aria-label="Temperature unit">
@@ -533,14 +555,71 @@ document.querySelectorAll("form").forEach(f => {
 
 // ---- print -------------------------------------------------------
 // The result is shown right under the Print button
+let printing = false;
 $("print").addEventListener("click", async () => {
   const btn = $("print");
-  btn.disabled = true; btn.textContent = "Printing…"; say("msg-print", "");
+  printing = true; showPrintButton(); btn.textContent = "Printing…"; say("msg-print", "");
   const body = Object.assign(formData(kind), { copies: $("copies").value || 1 });
   const res = await api("POST", `/api/print/${kind}`, body);
   // The server's message: "Label sent to printer" or what went wrong
   say("msg-print", res.body.message || (res.ok ? "Label sent to printer" : "Printing failed"), res.ok ? "ok" : "bad");
-  btn.disabled = false; btn.textContent = "Print";
+  printing = false; btn.textContent = "Print"; showPrintButton();
+  // Look again once the printer has had a moment (e.g. the roll may have
+  // just run out); straight away if the print failed
+  setTimeout(checkPrinter, res.ok ? 4000 : 0);
+});
+
+// ---- printer state ----------------------------------------------------
+// printerState: null while unknown/checking, else the reply from
+// /api/printer/status ({ok, state, message, media, source, detail}).
+let printerState = null, printerChecking = false, printerTimer = null;
+// Print is allowed once the printer has said it's ready (and not mid-print)
+function showPrintButton() { $("print").disabled = printing || !(printerState && printerState.ok); }
+// Show the state line under Print: quiet when ready, red with "Check again" when not
+function showPrinterState() {
+  const box = $("pstate"), text = $("pstate-text");
+  box.hidden = false;
+  if (printerChecking && !printerState) { box.className = "pstate"; text.textContent = "Checking printer…"; $("pstate-retry").hidden = true; }
+  else if (printerState && printerState.ok) {
+    box.className = "pstate";
+    text.textContent = printerState.media ? `Printer ready · ${printerState.media}` : "Printer ready";
+    $("pstate-retry").hidden = true;
+  } else if (printerState) {
+    box.className = "pstate bad"; text.textContent = printerState.message || "Printer unavailable";
+    $("pstate-retry").hidden = false;
+    $("pstate-retry").textContent = printerChecking ? "Checking…" : "Check again";
+  }
+  $("pstate-retry").disabled = printerChecking;
+  showPrintButton();
+}
+// Ask the server to check the printer. While there's a problem, check
+// again every 30 seconds (only while the page is on screen).
+async function checkPrinter() {
+  if (locked || printerChecking) return;
+  clearTimeout(printerTimer);
+  printerChecking = true; showPrinterState();
+  const res = await api("GET", "/api/printer/status");
+  printerChecking = false;
+  printerState = res.body && res.body.state ? res.body
+    : { ok: false, state: "unavailable", message: res.body.message || "Can't reach the label service" };
+  showPrinterState();
+  if (!printerState.ok) printerTimer = setTimeout(() => { if (!document.hidden) checkPrinter(); }, 30000);
+}
+$("pstate-retry").addEventListener("click", checkPrinter);
+// Phones keep pages open for a long time: check again when it comes back into view
+document.addEventListener("visibilitychange", () => { if (!document.hidden) checkPrinter(); });
+
+// Settings tab: "Check printer" shows the result and exactly what the printer said
+$("s-status").addEventListener("click", async () => {
+  const btn = $("s-status"); btn.disabled = true; btn.textContent = "Checking…";
+  const res = await api("GET", "/api/printer/status");
+  btn.disabled = false; btn.textContent = "Check printer";
+  const r = res.body || {};
+  if (r.state) { printerState = r; showPrinterState(); }
+  const how = { printer: "the printer's status reply", snmp: "SNMP", connection: "a connection test only", settings: "settings" }[r.source] || "unknown";
+  say("msg-status", `${r.message || "No answer"}${r.media ? ` · ${r.media}` : ""} (from ${how})`, r.ok ? "ok" : "bad");
+  $("s-status-detail").textContent = JSON.stringify(r.detail || {}, null, 2);
+  $("s-status-detail").hidden = false;
 });
 
 // ---- saving settings -------------------------------------------------
@@ -1189,6 +1268,7 @@ $("s-save").addEventListener("click", async () => {
   if (err) { say("msg-settings", err, "bad"); return; }
   $("f-date").value = today(); $("b-changed").value = today();
   setLocked(!isSetUp());
+  checkPrinter();
   say("msg-settings", firstTime && !locked
     ? "Printer connected and settings saved. The label tabs are unlocked – choose one at the top."
     : "Printer connected and settings saved", "ok");
@@ -1298,6 +1378,7 @@ async function init() {
   setLocked(!isSetUp());
   if (locked) start = "settings";
   showTab(start);
+  checkPrinter();
 }
 init();
 </script>

@@ -3,7 +3,7 @@
 Print useful labels on a Brother QL label printer from your phone or from
 Home Assistant.
 
-_Updated: 2026-11-09 02:10 GMT · Developer: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Updated: 2026-11-09 10:05 GMT · Developer: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 A small self-hosted web service, run in Docker (for example on a Synology
 NAS). It prints on a network-connected Brother QL printer from a
@@ -160,6 +160,16 @@ Then, if you like:
 The **Print** button sits directly under the label preview. Messages
 appear right next to the button you pressed.
 
+The page checks the printer when it opens (and after printing, and when
+you come back to it). If the printer can't print, **Print** is disabled
+with the reason – *Printer unavailable*, *Printer cover open*, *Label
+spool finished* or *Fit 62mm continuous label* – and a **Check again**
+button. When all is well it shows e.g. *Printer ready · 62mm continuous*.
+Which of these your printer can report depends on the model: every
+printer can report *unavailable*; the roll and cover need the printer to
+answer status requests over the network (Settings → **Printer status →
+Check printer** shows what yours says).
+
 Everything is saved in the `data/` folder (never in this repo or the
 published image), so it survives updates and is included in your backups.
 
@@ -310,6 +320,7 @@ data:
 | `POST /api/print/<type>` | Print → `{"ok": true/false, "message": "…"}` (add `"copies": n`) |
 | `GET/PUT /api/settings` | Saved details (`me`), `food_presets`, `trips`, battery types, `printer` (`host`, `port`, `model`), `timezone` (e.g. `Europe/London`), `temp_unit` (`C`/`F`), `accent` (`green`/`blue`/`red`/`pink`/`purple`/`orange`/`mono`); `password_set` is read-only |
 | `GET /api/options` | Printer models and time zone names |
+| `GET /api/printer/status` | Is the printer ready and which roll is loaded → `{"ok", "state", "message", "media", "source", "detail"}`; `state` is `ready`, `unavailable`, `cover_open`, `no_media`, `wrong_media` or `error`. Prints nothing. |
 | `POST /api/printer/test` | Check the printer can be reached without printing (body `host`/`port`, or empty to test the saved one) |
 | `GET /api/icons` | Icons: `[{"name", "custom"}]` |
 | `GET /api/icons/<name>` | Small PNG of an icon |

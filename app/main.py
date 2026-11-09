@@ -1,6 +1,6 @@
 # ------------------------------------------------------------------
 # labelprinter - label print service (web page + API)
-# Date: 2026-11-08 23:20 GMT (updated; first written 2026-11-07 18:10 GMT)
+# Date: 2026-11-09 09:40 GMT (updated; first written 2026-11-07 18:10 GMT)
 # Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
 #
 # Serves the phone-friendly web page and a small JSON API:
@@ -16,6 +16,7 @@
 #   POST /api/preview/<kind>    PNG preview of a label
 #   POST /api/print/<kind>      print it  -> {"ok": bool, "message": str}
 #   POST /api/printer/test      check the printer can be reached (no print)
+#   GET  /api/printer/status    is it ready, and which roll is loaded? (no print)
 #   GET  /api/options           printer models and time zones
 #   GET  /login, POST /api/login, POST /api/logout   optional password
 #   PUT  /api/password          set, change or remove the password
@@ -45,6 +46,7 @@ from waitress import serve
 
 import labels
 import printer
+import status as printer_status
 from auth import Auth, session_lifetime
 
 DATA_DIR = os.environ.get("DATA_DIR", "/data")
@@ -426,6 +428,25 @@ def test_printer():
         body = load_settings().get("printer") or {}
     ok, message = printer.test_connection(body.get("host"), body.get("port"))
     return jsonify({"ok": ok, "message": message}), (200 if ok else 502)
+
+
+@app.get("/api/printer/status")
+def get_printer_status():
+    """Is the saved printer ready to print, and which roll is loaded?
+
+    Checks the connection, then asks the printer for its status (see
+    status.py). Prints nothing. The page uses this to disable Print with
+    a message such as "Printer cover open"; "detail" holds what the
+    printer actually said, shown in the Settings tab.
+    """
+    target = load_settings()["printer"]
+    if not target.get("host"):
+        return jsonify({"ok": False, "state": "unavailable", "message": "No printer set up yet",
+                        "media": None, "source": "settings", "detail": {}})
+    # Wait for any print job to finish first, so the two never overlap
+    with printer.job_lock():
+        result = printer_status.check(target.get("host"), target.get("port") or printer.DEFAULT_PORT)
+    return jsonify(result)
 
 
 @app.get("/health")

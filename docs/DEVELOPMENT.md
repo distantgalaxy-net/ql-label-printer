@@ -3,7 +3,7 @@
 Read this before changing the code. It explains what we're building, the decisions already made
 and the constraints that aren't obvious from the code.
 
-_Last updated: 2026-11-09 02:10 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Last updated: 2026-11-09 10:05 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 ---
 
@@ -62,6 +62,19 @@ AB1 2CD", `192.168.1.20`, `labels.home.example`).
   the plain-HTTP hop inside the NAS doesn't matter. Several
   addresses → the user picks one (no default). Tested with a stand-in
   picker only; Android Chrome is the target, iPhone untested.
+- **Printer status** (`app/status.py`, `GET /api/printer/status`): TCP
+  connect (3 s) → "Printer unavailable" if it fails; then Brother's status
+  request (`ESC i S`) on that connection, decoded with brother_ql's
+  `interpret_response`; if no reply in 2 s, SNMP v1 GET-NEXT (stdlib
+  only, community `public`) for hrPrinterDetectedErrorState,
+  hrDeviceStatus, prtInputMediaName and prtCoverStatus. No answer to
+  either → treated as ready (reachable, status unknown). Status checks take
+  the printer job lock, so they never overlap a print. The page checks on
+  load, after printing, on becoming visible, and every 30 s while not
+  ready; Print stays disabled until a check says ready. Home Assistant
+  printing isn't blocked by it. **Unverified on hardware:** whether the
+  QL-810W answers `ESC i S` or SNMP over Wi-Fi – use Settings → Check
+  printer, whose details show the raw reply.
 - **Print** sits directly under the label preview (no fixed bottom bar),
   so what you see and the button are together.
 - **Messages** appear next to the button that caused them (`say()` in
@@ -137,6 +150,7 @@ app/main.py        Flask routes, settings load/save (atomic write), login gate
 app/auth.py        Optional password: hash storage, cookie key, reset
 app/labels.py      All label layouts + built-in icons (drawn with Pillow)
 app/printer.py     Image -> QL raster -> send to printer; models; address checks
+app/status.py      Printer ready? Roll loaded? (connection, ESC i S, SNMP)
 app/static/index.html  Phone-first page (vanilla JS, no build step)
 app/static/login.html  Password page (only used when a password is set)
 app/static/theme.css   Accent colour shades (light + dark) and swatches
@@ -220,6 +234,11 @@ image is valid for a model (it raises if the size is wrong).
   read into the flight boxes for checking, then added.
 - 2026-11-08 – Accent colour choice in Settings (green default; blue, red,
   pink, purple, orange, monochrome), each tuned for light and dark themes.
+- 2026-11-09 – Page checks the printer and disables Print with the reason
+  (unavailable / cover open / spool finished / wrong roll). brother_ql's
+  network backend can't read status, so status.py asks the printer
+  directly, with SNMP as the fallback; SNMP written with the standard
+  library to avoid a new dependency.
 - 2026-11-09 – Contact card (.vcf) import added for computers and iPhones
   (Safari's picker can't share addresses). Read in the browser only.
 - 2026-11-09 – Contacts on phones via the browser's Contact Picker API
