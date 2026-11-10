@@ -1,7 +1,7 @@
 <!doctype html>
 <!--
   labelprinter - label printing page (phone-first)
-  Date: 2026-11-10 11:00 GMT (updated; first written 2026-11-07 18:15 GMT)
+  Date: 2026-11-10 11:40 GMT (updated; first written 2026-11-07 18:15 GMT)
   Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
   One form per label type; the preview updates as you type, then Print.
   The Settings tab holds the printer (model, IP address, port), the time
@@ -58,8 +58,14 @@
   .wrap { max-width: 560px; margin: 0 auto; padding: 14px 16px calc(24px + env(safe-area-inset-bottom)); }
   h1 { font-size: 1.25rem; margin: 4px 0 12px; }
   .top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
-  nav { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 12px; }
-  nav button { flex: none; border: 1px solid var(--line); background: var(--card); color: var(--fg);
+  /* Icon menu: square buttons, Settings pushed to the right */
+  nav { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 6px; }
+  nav button { flex: none; width: 46px; height: 46px; display: grid; place-items: center; padding: 0 !important;
+    border-radius: 12px !important; }
+  nav button[data-kind="settings"] { margin-left: auto; }
+  nav button svg { display: block; }
+  .pagetitle { font-size: 1.15rem; margin: 6px 0 12px; }
+  nav button { border: 1px solid var(--line); background: var(--card); color: var(--fg);
     padding: 8px 14px; border-radius: 999px; font: inherit; font-size: .95rem; cursor: pointer; }
   nav button:disabled { opacity: .4; cursor: not-allowed; }
   nav button[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
@@ -117,6 +123,9 @@
   .list li .grow { flex: 1; min-width: 0; overflow-wrap: anywhere; }
   .list li.break { border: 0; background: none; padding: 0 8px; color: var(--muted); font-size: .8rem; }
   .addrtext { white-space: pre-line; text-align: left; }
+  /* Saved notes row under a note box: list + Save / Delete */
+  .noterow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: -4px; }
+  .noterow select { flex: 1; min-width: 160px; padding: 6px 8px; font-size: .9rem; }
   .addrtext b { display: block; font-size: .8rem; color: var(--muted); font-weight: 600; }
   form.dropping { outline: 2px dashed var(--accent); outline-offset: 6px; border-radius: 8px; }
   .legtext { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: .85rem; }
@@ -140,14 +149,17 @@
 <body>
 <div class="wrap">
   <div class="top"><h1>Label Printer</h1><button type="button" class="linkbtn" id="logout" hidden>Log out</button></div>
-  <nav role="tablist" id="tabs">
-    <button role="tab" data-kind="address">Address</button>
-    <button role="tab" data-kind="food">Food</button>
-    <button role="tab" data-kind="travel">Travel</button>
-    <button role="tab" data-kind="battery">Battery</button>
-    <button role="tab" data-kind="network">Network</button>
-    <button role="tab" data-kind="settings">Settings</button>
+  <!-- Menu: one icon per page (Lucide icons, ISC licence: lucide.dev).
+       The name shows as a tooltip on hover, and as the page title below. -->
+  <nav role="tablist" id="tabs" aria-label="Pages">
+    <button role="tab" data-kind="address" title="Address label" aria-label="Address label"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7"/><rect x="2" y="4" width="20" height="16" rx="2"/></svg></button>
+    <button role="tab" data-kind="food" title="Food label" aria-label="Food label"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/></svg></button>
+    <button role="tab" data-kind="travel" title="Luggage label" aria-label="Luggage label"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/></svg></button>
+    <button role="tab" data-kind="battery" title="Battery label" aria-label="Battery label"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M 22 14 L 22 10"/><rect x="2" y="6" width="16" height="12" rx="2"/></svg></button>
+    <button role="tab" data-kind="network" title="Network device label" aria-label="Network device label"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/></svg></button>
+    <button role="tab" data-kind="settings" title="Settings" aria-label="Settings"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></svg></button>
   </nav>
+  <h2 class="pagetitle" id="page-title">Address label</h2>
 
   <div class="preview" id="preview-box">
     <div class="paper"><img id="preview" alt="Label preview"></div>
@@ -162,7 +174,7 @@
     <!-- Printer state: "Printer ready · 62mm continuous", or the problem -->
     <div class="pstate" id="pstate" role="status" hidden>
       <span class="grow" id="pstate-text"></span>
-      <button type="button" class="btn2 mini" id="pstate-retry" hidden>Check again</button>
+      <button type="button" class="btn2 primary mini" id="pstate-retry" hidden>Check again</button>
     </div>
   </div>
 
@@ -174,6 +186,13 @@
       <label>Address (one line per row)<textarea id="a-address" name="address" placeholder="1 High Street&#10;Anytown&#10;AB1 2CD"></textarea></label>
       <!-- Optional note: printed small, across the full width, under the address -->
       <label>Note (optional)<textarea id="a-note" name="note" style="min-height:60px" placeholder="Please leave with a neighbour"></textarea></label>
+      <!-- Saved notes: reuse delivery instructions / cooking notes -->
+      <div class="noterow" data-notes="address" data-for="a-note">
+        <select class="note-pick" aria-label="Saved notes"><option value="">Use a saved note…</option></select>
+        <button type="button" class="btn2 primary mini note-save">Save note</button>
+        <button type="button" class="btn2 danger mini note-del" hidden>Delete note</button>
+      </div>
+      <p class="msg" id="msg-note-address" role="status"></p>
       <div class="seg" role="radiogroup" aria-label="Note alignment">
         <label><input type="radio" name="note_align" value="left" checked> Left</label>
         <label><input type="radio" name="note_align" value="center"> Centre</label>
@@ -185,21 +204,21 @@
 
       <!-- 2. Saved addresses: reprint without finding the contact again -->
       <div class="group">
-        <h3>Saved addresses</h3>
-        <label>Load a saved address<select id="s-saved"><option value="">Choose a name…</option></select></label>
+        <h3>Saved address labels</h3>
+        <label>Load a saved address label<select id="s-saved"><option value="">Choose a name…</option></select></label>
         <div class="actions">
-          <button type="button" class="btn2 primary" id="s-save-address">Save this address</button>
-          <button type="button" class="btn2 danger" id="s-delete-address" hidden>Delete saved address</button>
+          <button type="button" class="btn2 primary" id="s-save-address">Save address label</button>
+          <button type="button" class="btn2 danger" id="s-delete-address" hidden>Delete saved address label</button>
         </div>
         <p class="msg" id="msg-saved" role="status"></p>
-        <p class="small">Saves the whole label under the name, encrypted on this label printer app's server.</p>
+        <p class="small">Saves the whole label (name, address, note and icon) under the name, encrypted on this label printer app's server.</p>
         <!-- Every saved name with its own Delete button (folds away) -->
         <details id="s-manage" data-remember="labelprinter-open-saved">
-          <summary id="s-manage-title">Manage saved addresses</summary>
+          <summary id="s-manage-title">Manage saved address labels</summary>
           <div class="inner">
           <input id="s-search" type="search" placeholder="Search names" autocomplete="off" hidden>
           <ul class="list" id="s-list"></ul>
-          <p class="small" id="s-none">No saved addresses yet.</p>
+          <p class="small" id="s-none">No saved address labels yet.</p>
           </div>
         </details>
       </div>
@@ -212,7 +231,7 @@
         <div class="inner">
         <div class="actions">
           <button type="button" class="btn2 primary" id="c-pick" hidden>Choose from contacts</button>
-          <button type="button" class="btn2" id="c-import">Import contact card</button>
+          <button type="button" class="btn2 primary" id="c-import">Import contact card</button>
           <input type="file" id="c-file" accept=".vcf,text/vcard,text/x-vcard" hidden>
         </div>
         <p class="small" id="c-note" hidden></p>
@@ -230,7 +249,7 @@
           <div class="actions"><button type="button" class="btn2" id="c-cancel">Cancel</button></div>
         </div>
         <p class="msg" id="msg-contacts" role="status"></p>
-        <p class="small">Your contacts stay on this device: contact cards and the phone's contact list are read here, in your browser. Only the name and address you choose are sent to this label printer app, to show the preview and print the label. They're only kept if you choose Save this address.</p>
+        <p class="small">Your contacts stay on this device: contact cards and the phone's contact list are read here, in your browser. Only the name and address you choose are sent to this label printer app, to show the preview and print the label. They're only kept if you choose Save address label.</p>
         </div>
       </details>
 
@@ -253,7 +272,6 @@
 
     <!-- Food (freezer, fridge or cupboard) -->
     <form data-kind="food" hidden>
-      <label>Saved food (preset)<select id="f-preset"><option value="">Choose a saved food…</option></select></label>
       <div class="seg" role="radiogroup" aria-label="Where it's kept">
         <label><input type="radio" name="storage" value="frozen" checked> Freezer</label>
         <label><input type="radio" name="storage" value="fridge"> Fridge</label>
@@ -281,14 +299,31 @@
         <label><span class="unit-label" data-fan>Fan °C</span><input id="f-fan" name="fan" type="number" min="0" inputmode="numeric"></label>
       </div>
       <label>Notes (optional)<textarea id="f-notes" name="notes" style="min-height:60px" placeholder="Stir halfway"></textarea></label>
+      <!-- Saved notes: reuse delivery instructions / cooking notes -->
+      <div class="noterow" data-notes="food" data-for="f-notes">
+        <select class="note-pick" aria-label="Saved notes"><option value="">Use a saved note…</option></select>
+        <button type="button" class="btn2 primary mini note-save">Save note</button>
+        <button type="button" class="btn2 danger mini note-del" hidden>Delete note</button>
+      </div>
+      <p class="msg" id="msg-note-food" role="status"></p>
+      <!-- Saved food labels: same layout as saved address labels -->
       <div class="group">
-        <h3>Presets</h3>
-        <p class="small">A preset saves everything on this form except the date. When you pick it again the date is today and the use-by date is worked out again. Presets are saved on this server.</p>
+        <h3>Saved food labels</h3>
+        <label>Load a saved food label<select id="f-preset"><option value="">Choose a food…</option></select></label>
         <div class="actions">
-          <button type="button" class="btn2 primary" id="f-save">Save as preset</button>
-          <button type="button" class="btn2 danger" id="f-delete" hidden>Delete preset</button>
+          <button type="button" class="btn2 primary" id="f-save">Save food label</button>
+          <button type="button" class="btn2 danger" id="f-delete" hidden>Delete saved food label</button>
         </div>
         <p class="msg" id="msg-food" role="status"></p>
+        <p class="small">Saves everything on this page except the date, under the food's name. When you load it, the date is today and the use-by date is worked out again.</p>
+        <details id="f-manage" data-remember="labelprinter-open-food">
+          <summary id="f-manage-title">Manage saved food labels</summary>
+          <div class="inner">
+          <input id="f-search" type="search" placeholder="Search foods" autocomplete="off" hidden>
+          <ul class="list" id="f-list"></ul>
+          <p class="small" id="f-none">No saved food labels yet.</p>
+          </div>
+        </details>
       </div>
     </form>
 
@@ -362,7 +397,7 @@
         <div class="actions">
           <button type="button" class="btn2 primary" id="t-trip-save">Save trip</button>
           <button type="button" class="btn2 danger" id="t-trip-delete" hidden>Delete saved trip</button>
-          <button type="button" class="btn2" id="t-clear">Clear flights</button>
+          <button type="button" class="btn2 danger" id="t-clear">Clear flights</button>
         </div>
         <p class="msg" id="msg-trip" role="status"></p>
       </div>
@@ -393,7 +428,7 @@
     <!-- Settings: not a label, so the preview and Print button are hidden on this tab -->
     <form data-kind="settings" hidden>
       <p class="small" id="s-version">Version …</p>
-      <p class="info" id="s-welcome" hidden><strong>Welcome!</strong> Set up your printer to get started. Tap <strong>Test and save</strong>: it checks it can reach the printer, then unlocks the label tabs.</p>
+      <p class="info" id="s-welcome" hidden><strong>Welcome!</strong> Set up your printer to get started. Check the time zone below, then tap <strong>Test and save</strong>: it checks it can reach the printer, then unlocks the label pages.</p>
       <h2>Printer</h2>
       <p class="small">Where to send labels. The printer needs a fixed IP address (set a DHCP reservation in your router) and must accept raw printing on the port below. Only the 62mm continuous roll (DK-22205) is supported.</p>
       <label>Printer model<select id="s-model"></select></label>
@@ -403,10 +438,6 @@
       </div>
       <p class="small">Brother printers use port 9100. If printing is refused, turn Editor Lite off on the printer. If a firewall sits between them, allow the machine running this service (e.g. your NAS) to reach the printer on this port.</p>
 
-      <h2>Time zone</h2>
-      <label>Time zone<select id="s-tz"><option value="">Choose…</option></select></label>
-      <div class="actions"><button type="button" class="btn2" id="s-tz-device">Use this device's time zone</button></div>
-      <p class="small" id="s-tz-now">Used for today's date on labels. Daylight saving (e.g. GMT → BST) changes automatically.</p>
       <div class="actions">
         <button type="button" class="btn2 primary" id="s-save">Test and save</button>
       </div>
@@ -414,9 +445,16 @@
 
       <h2>Printer status</h2>
       <p class="small">Asks the printer whether it's ready and which roll is loaded (nothing is printed). The details show exactly what the printer replied.</p>
-      <div class="actions"><button type="button" class="btn2" id="s-status">Check printer</button></div>
+      <div class="actions"><button type="button" class="btn2 primary" id="s-status">Check printer</button></div>
       <p class="msg" id="msg-status" role="status"></p>
       <pre class="detail" id="s-status-detail" hidden></pre>
+
+      <h2>Time zone</h2>
+      <p class="small">Used for today's date on labels. Saved straight away.</p>
+      <label>Time zone<select id="s-tz"><option value="">Choose…</option></select></label>
+      <div class="actions"><button type="button" class="btn2 primary" id="s-tz-device">Use this device's time zone</button></div>
+      <p class="small" id="s-tz-now">Daylight saving (e.g. GMT → BST) changes automatically.</p>
+      <p class="msg" id="msg-tz" role="status"></p>
 
       <h2>Temperature unit</h2>
       <p class="small">Used for cooking temperatures on food labels. Saved straight away.</p>
@@ -447,7 +485,7 @@
         <label>Confirm<input id="pw-confirm" type="password" autocomplete="new-password"></label>
       </div>
       <div class="actions">
-        <button type="button" class="btn2" id="pw-set">Set password</button>
+        <button type="button" class="btn2 primary" id="pw-set">Set password</button>
         <button type="button" class="btn2 danger" id="pw-remove" hidden>Remove password</button>
       </div>
       <p class="msg" id="msg-pw" role="status"></p>
@@ -558,6 +596,8 @@ function showTab(k) {
   kind = k;
   const isSettings = k === "settings";
   document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.kind === k)));
+  // The page's name (the menu button's tooltip) as the first thing on the page
+  $("page-title").textContent = document.querySelector(`#tabs button[data-kind="${k}"]`).title;
   document.querySelectorAll("form[data-kind]").forEach(f => f.hidden = f.dataset.kind !== k);
   $("preview-box").hidden = isSettings;
   try { localStorage.setItem("labelprinter-tab", k); } catch (e) {}
@@ -977,7 +1017,7 @@ const savedMatch = () => savedAddresses.find(a => a.name.toLowerCase() === $("a-
 // "Save" or "Update", and Delete only when the name is already saved
 function savedButtons() {
   const match = savedMatch();
-  $("s-save-address").textContent = match ? "Update saved address" : "Save this address";
+  $("s-save-address").textContent = match ? "Update saved address label" : "Save address label";
   $("s-delete-address").hidden = !match;
 }
 function fillSaved(selectId) {
@@ -985,7 +1025,7 @@ function fillSaved(selectId) {
   savedAddresses.forEach(a => sel.add(new Option(a.name, a.id)));
   sel.value = selectId || "";
   savedButtons();
-  $("s-manage-title").textContent = `Manage saved addresses (${savedAddresses.length})`;
+  $("s-manage-title").textContent = `Manage saved address labels (${savedAddresses.length})`;
   $("s-search").hidden = savedAddresses.length <= 8;
   listSaved($("s-search").value);
 }
@@ -1009,7 +1049,7 @@ function listSaved(filter) {
 $("s-search").addEventListener("input", e => listSaved(e.target.value));
 // Delete one saved address (after asking); the form is left as it is
 async function deleteSaved(a) {
-  if (!confirm(`Delete the saved address for “${a.name}”?`)) return;
+  if (!confirm(`Delete the saved address label for “${a.name}”?`)) return;
   const res = await api("DELETE", `/api/addresses/${encodeURIComponent(a.id)}`);
   if (!res.ok) { say("msg-saved", res.body.message || "Couldn't delete", "bad"); return; }
   savedAddresses = res.body.addresses; fillSaved();
@@ -1026,27 +1066,70 @@ $("a-name").addEventListener("input", savedButtons);
 $("s-saved").addEventListener("change", async e => {
   if (!e.target.value) return;
   const res = await api("GET", `/api/addresses/${encodeURIComponent(e.target.value)}`);
-  if (!res.ok) { say("msg-saved", res.body.message || "Couldn't load that address", "bad"); return; }
+  if (!res.ok) { say("msg-saved", res.body.message || "Couldn't load that address label", "bad"); return; }
   const a = res.body.address;
   $("a-name").value = a.name || ""; $("a-address").value = a.address || ""; $("a-note").value = a.note || "";
   setRadio("address", "note_align", a.note_align === "center" ? "center" : "left");
   $("a-icon").value = icons.some(i => i.name === a.icon) ? a.icon : "none"; showIconThumb();
   savedButtons();
-  say("msg-saved", `Loaded “${a.name}”`, "info");
+  refreshNoteRows();
+  say("msg-saved", `Loaded the address label for “${a.name}”`, "info");
   schedulePreview(0);
   showPreview();
 });
 // Save (or update) the label as it is now, under the name
 $("s-save-address").addEventListener("click", async () => {
   const d = formData("address");
-  if (!d.name.trim()) { say("msg-saved", "Type the name first: the address is saved under it", "bad"); return; }
+  if (!d.name.trim()) { say("msg-saved", "Type the name first: the label is saved under it", "bad"); return; }
   const res = await api("PUT", "/api/addresses", { name: d.name, address: d.address, icon: d.icon === "none" ? "" : d.icon,
                                                    note: d.note, note_align: d.note_align });
-  if (!res.ok) { say("msg-saved", res.body.message || "Couldn't save the address", "bad"); return; }
+  if (!res.ok) { say("msg-saved", res.body.message || "Couldn't save the address label", "bad"); return; }
   savedAddresses = res.body.addresses; fillSaved(res.body.id);
   say("msg-saved", res.body.message, "ok");
 });
 $("s-delete-address").addEventListener("click", () => { const match = savedMatch(); if (match) deleteSaved(match); });
+
+// ---- saved notes (address note and food notes) -------------------------
+// Reusable notes, kept per page in settings.saved_notes = {address: [...],
+// food: [...]}. Pick one to put it in the box, Save note to keep what's in
+// the box, Delete note when the box matches a saved one.
+const notesFor = (k) => ((settings.saved_notes || {})[k] || []);
+function setUpNoteRow(row) {
+  const k = row.dataset.notes, box = $(row.dataset.for), pick = row.querySelector(".note-pick");
+  const save = row.querySelector(".note-save"), del = row.querySelector(".note-del"), msg = `msg-note-${k}`;
+  const short = (t) => { const one = t.replace(/\s+/g, " "); return one.length > 50 ? one.slice(0, 49) + "…" : one; };
+  function refresh() {
+    const notes = notesFor(k);
+    pick.length = 1;
+    notes.forEach((t, i) => pick.add(new Option(short(t), i)));
+    pick.hidden = !notes.length;
+    const match = notes.indexOf(box.value.trim());
+    del.hidden = match < 0;
+    save.hidden = !box.value.trim() || match >= 0;
+  }
+  async function store(list, done) {
+    const err = await saveSettings({ saved_notes: { ...(settings.saved_notes || {}), [k]: list } });
+    if (err) { say(msg, err, "bad"); return; }
+    refresh(); say(msg, done, "ok");
+  }
+  pick.addEventListener("change", () => {
+    const t = notesFor(k)[pick.value];
+    if (t == null) return;
+    box.value = t; pick.value = ""; refresh(); schedulePreview(0);
+  });
+  save.addEventListener("click", () => {
+    const t = box.value.trim();
+    if (t && !notesFor(k).includes(t)) store([...notesFor(k), t], "Note saved – pick it from the list next time");
+  });
+  del.addEventListener("click", () => {
+    const t = box.value.trim();
+    if (confirm(`Delete this saved note?\n\n${short(t)}`)) store(notesFor(k).filter(n => n !== t), "Saved note deleted");
+  });
+  box.addEventListener("input", refresh);
+  row.refresh = refresh;
+}
+document.querySelectorAll(".noterow").forEach(setUpNoteRow);
+const refreshNoteRows = () => document.querySelectorAll(".noterow").forEach(r => r.refresh());
 
 // Folding sections remember whether they were left open, in this browser
 document.querySelectorAll("details[data-remember]").forEach(d => {
@@ -1170,11 +1253,14 @@ function fillPresets() {
   sel.length = 1;
   presets().forEach((p, i) => sel.add(new Option(`${p.title} · ${STORAGE_NAMES[p.storage] || "Freezer"}`, i)));
   presetButtons();
+  $("f-manage-title").textContent = `Manage saved food labels (${presets().length})`;
+  $("f-search").hidden = presets().length <= 8;
+  listPresets($("f-search").value);
 }
 // "Save as preset" becomes "Update preset" when the food name is already saved
 function presetButtons() {
   const found = findPreset($("f-title").value) >= 0;
-  $("f-save").textContent = found ? "Update preset" : "Save as preset";
+  $("f-save").textContent = found ? "Update saved food label" : "Save food label";
   $("f-delete").hidden = !found;
 }
 $("f-title").addEventListener("input", presetButtons);
@@ -1195,7 +1281,9 @@ $("f-preset").addEventListener("change", e => {
   $("f-fan").value = convertTemp(p.fan, from, to);
   $("f-notes").value = p.notes || "";
   showStorage(true); presetButtons();
+  refreshNoteRows();
   say("msg-food", `Loaded “${p.title}” with today's date`, "info");
+  showPreview();
   schedulePreview(0);
 });
 // Save (or update) a preset with everything except the date
@@ -1211,18 +1299,36 @@ $("f-save").addEventListener("click", async () => {
   if (err) { say("msg-food", err, "bad"); return; }
   fillPresets();
   $("f-preset").value = String(findPreset(preset.title));
-  say("msg-food", updating ? `Updated preset “${preset.title}”` : `Saved preset “${preset.title}” – choose it from Saved food next time`, "ok");
+  say("msg-food", updating ? `Updated the saved food label “${preset.title}”` : `Saved the food label “${preset.title}”`, "ok");
 });
-$("f-delete").addEventListener("click", async () => {
-  const i = findPreset($("f-title").value);
-  if (i < 0) return;
-  const title = presets()[i].title;
-  if (!confirm(`Delete the preset “${title}”?`)) return;
+// Delete a saved food label (after asking); the form is left as it is
+async function deletePreset(i) {
+  const p = presets()[i];
+  if (!p || !confirm(`Delete the saved food label “${p.title}”?`)) return;
   const err = await saveSettings({ food_presets: presets().filter((_, n) => n !== i) });
   if (err) { say("msg-food", err, "bad"); return; }
   fillPresets(); $("f-preset").value = "";
-  say("msg-food", `Deleted preset “${title}”`, "ok");
-});
+  say("msg-food", `Deleted the saved food label “${p.title}”`, "ok");
+}
+$("f-delete").addEventListener("click", () => { const i = findPreset($("f-title").value); if (i >= 0) deletePreset(i); });
+// The manage list: each saved food with a Delete button, filtered by the search box
+function listPresets(filter) {
+  const list = $("f-list"); list.textContent = "";
+  const f = (filter || "").trim().toLowerCase();
+  const all = presets().map((p, i) => ({ p, i }));
+  const shown = all.filter(({ p }) => !f || p.title.toLowerCase().includes(f));
+  shown.forEach(({ p, i }) => {
+    const li = document.createElement("li");
+    const name = document.createElement("span"); name.className = "grow";
+    name.textContent = `${p.title} · ${STORAGE_NAMES[p.storage] || "Freezer"}`;
+    const del = document.createElement("button"); del.type = "button"; del.className = "btn2 danger mini"; del.textContent = "Delete";
+    del.addEventListener("click", () => deletePreset(i));
+    li.append(name, del); list.append(li);
+  });
+  $("f-none").hidden = all.length > 0;
+  if (all.length && !shown.length) { const li = document.createElement("li"); li.className = "break"; li.textContent = "No foods match"; list.append(li); }
+}
+$("f-search").addEventListener("input", e => listPresets(e.target.value));
 
 // ---- Travel tab: my details ---------------------------------------------
 // Saved details are shown locked (with Edit / Clear); unsaved ones as boxes
@@ -1418,36 +1524,49 @@ function printerFields() {
 // to check (e.g. "Now 09:40 GMT"; in summer it would say BST)
 function showZoneTime() {
   const tz = $("s-tz").value;
-  if (!tz) { $("s-tz-now").textContent = "Used for today's date on labels. Daylight saving (e.g. GMT → BST) changes automatically."; return; }
+  if (!tz) { $("s-tz-now").textContent = "Daylight saving (e.g. GMT → BST) changes automatically."; return; }
   try {
     const now = new Intl.DateTimeFormat("en-GB", { timeZone: tz, weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZoneName: "short" }).format(new Date());
     $("s-tz-now").textContent = `Current time: ${now}. Daylight saving changes automatically.`;
   } catch (e) { $("s-tz-now").textContent = ""; }
 }
-$("s-tz").addEventListener("change", showZoneTime);
+// The time zone is saved as soon as it changes (on a new install it's also
+// saved by Test and save, so setup still finishes in one step)
+async function saveZone() {
+  const tz = $("s-tz").value;
+  showZoneTime();
+  if (!tz) return;
+  const err = await saveSettings({ timezone: tz });
+  if (err) { say("msg-tz", err, "bad"); return; }
+  $("f-date").value = today(); $("b-changed").value = today();
+  if (locked && isSetUp()) { setLocked(false); checkPrinter(); }
+  say("msg-tz", `Saved: ${tz.replace(/_/g, " ")}`, "ok");
+}
+$("s-tz").addEventListener("change", saveZone);
 $("s-tz-device").addEventListener("click", () => {
   const z = deviceZone();
-  if (z && [...$("s-tz").options].some(o => o.value === z)) {
-    $("s-tz").value = z; showZoneTime();
-    say("msg-settings", `Time zone set to ${z.replace(/_/g, " ")}. Tap Test and save to keep it.`, "info");
-  } else say("msg-settings", "Couldn't tell this device's time zone; pick it from the list", "bad");
+  if (z && [...$("s-tz").options].some(o => o.value === z)) { $("s-tz").value = z; saveZone(); }
+  else say("msg-tz", "Couldn't tell this device's time zone; pick it from the list", "bad");
 });
 // Save: the server tests the printer connection first and refuses to save
 // if it can't connect. The first successful save unlocks the label tabs.
 // We stay on this tab so the result is shown right under the button.
 $("s-save").addEventListener("click", async () => {
   if (!$("s-host").value.trim()) { say("msg-settings", "Enter the printer's IP address", "bad"); return; }
-  if (!$("s-tz").value) { say("msg-settings", "Choose a time zone", "bad"); return; }
+  if (!settings.timezone && !$("s-tz").value) { say("msg-settings", "Choose a time zone below first", "bad"); return; }
   const btn = $("s-save"), firstTime = locked;
   btn.disabled = true; btn.textContent = "Connecting…"; say("msg-settings", "");
-  const err = await saveSettings({ printer: printerFields(), timezone: $("s-tz").value });
+  // A new install also stores the time zone shown (the device's, suggested)
+  const patch = { printer: printerFields() };
+  if (!settings.timezone) patch.timezone = $("s-tz").value;
+  const err = await saveSettings(patch);
   btn.disabled = false; btn.textContent = "Test and save";
   if (err) { say("msg-settings", err, "bad"); return; }
   $("f-date").value = today(); $("b-changed").value = today();
   setLocked(!isSetUp());
   checkPrinter();
   say("msg-settings", firstTime && !locked
-    ? "Printer connected and settings saved. The label tabs are unlocked – choose one at the top."
+    ? "Printer connected and settings saved. The label pages are unlocked – choose one at the top."
     : "Printer connected and settings saved", "ok");
 });
 // Temperature unit: saved as soon as it's changed
@@ -1526,6 +1645,7 @@ async function init() {
   fillIcons("none");
   setUpContacts();
   loadSavedList();
+  refreshNoteRows();
   fillPresets();
   fillTrips();
   (settings.battery_types || []).forEach(t => $("b-types").append(new Option(t)));

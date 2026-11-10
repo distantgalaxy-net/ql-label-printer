@@ -1,6 +1,6 @@
 # ------------------------------------------------------------------
 # labelprinter - saved addresses, encrypted on disk
-# Date: 2026-11-10 10:00 GMT
+# Date: 2026-11-10 11:40 GMT (updated; first written 2026-11-10 10:00 GMT)
 # Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
 #
 # Address labels can be saved under the person's name so they can be
@@ -99,7 +99,7 @@ class AddressBook:
         (ignoring capitals) is updated. Returns (entry, updated, error)."""
         entry = {k: str(data.get(k) or "").strip()[:limit] for k, limit in FIELDS.items()}
         if not entry["name"]:
-            return None, False, "Type the name first: the address is saved under it."
+            return None, False, "Type the name first: the label is saved under it."
         if entry["note_align"] not in ("left", "center"):
             entry["note_align"] = "left"
         with self._lock:
@@ -110,7 +110,7 @@ class AddressBook:
                 entry = match
             else:
                 if len(entries) >= MAX_ENTRIES:
-                    return None, False, f"You can save up to {MAX_ENTRIES} addresses."
+                    return None, False, f"You can save up to {MAX_ENTRIES} address labels."
                 entry = {"id": secrets.token_hex(8), **entry}
                 entries.append(entry)
             self._store(entries)

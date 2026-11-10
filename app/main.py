@@ -1,6 +1,6 @@
 # ------------------------------------------------------------------
 # labelprinter - label print service (web page + API)
-# Date: 2026-11-10 10:00 GMT (updated; first written 2026-11-07 18:10 GMT)
+# Date: 2026-11-10 11:40 GMT (updated; first written 2026-11-07 18:10 GMT)
 # Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
 #
 # Serves the phone-friendly web page and a small JSON API:
@@ -93,6 +93,8 @@ DEFAULT_SETTINGS = {
     "food_presets": [],
     # Saved trips for travel labels: [{"name": ..., "legs": [...]}]
     "trips": [],
+    # Reusable notes per page: delivery instructions, cooking notes
+    "saved_notes": {"address": [], "food": []},
     "battery_types": ["CR2032", "CR2450", "CR2", "CR123A", "AA", "AAA", "9V"],
 }
 
@@ -303,6 +305,13 @@ def put_settings():
     for key in ("food_presets", "trips", "battery_types"):
         if key in body and not isinstance(body[key], list):
             return jsonify({"ok": False, "message": f"'{key}' must be a list."}), 400
+    if "saved_notes" in body:
+        # {page: [note, ...]}: known pages only, text notes, sensible limits
+        notes = body["saved_notes"]
+        if not isinstance(notes, dict):
+            return jsonify({"ok": False, "message": "'saved_notes' must be an object."}), 400
+        body["saved_notes"] = {k: [str(n).strip()[:500] for n in notes.get(k) or [] if str(n).strip()][:100]
+                               for k in ("address", "food") if isinstance(notes.get(k, []), list)}
     if "trips" in body:
         # Keep saved trips tidy: a name and well-formed flights only
         body["trips"] = [{"name": str(t.get("name") or "").strip()[:60],
@@ -398,7 +407,7 @@ def get_address(entry_id):
     except AddressBookError as exc:
         return _book_error(exc)
     if not entry:
-        return jsonify({"ok": False, "message": "That saved address isn't there any more."}), 404
+        return jsonify({"ok": False, "message": "That saved address label isn't there any more."}), 404
     return jsonify({"ok": True, "address": entry})
 
 
@@ -415,7 +424,7 @@ def save_address():
     if err:
         return jsonify({"ok": False, "message": err}), 400
     return jsonify({"ok": True, "id": entry["id"], "updated": updated,
-                    "message": f"{'Updated' if updated else 'Saved'} “{entry['name']}”",
+                    "message": f"{'Updated' if updated else 'Saved'} the address label for “{entry['name']}”",
                     "addresses": address_book.names()})
 
 
@@ -427,8 +436,8 @@ def delete_address(entry_id):
     except AddressBookError as exc:
         return _book_error(exc)
     if not name:
-        return jsonify({"ok": False, "message": "That saved address isn't there any more."}), 404
-    return jsonify({"ok": True, "message": f"Deleted “{name}”", "addresses": address_book.names()})
+        return jsonify({"ok": False, "message": "That saved address label isn't there any more."}), 404
+    return jsonify({"ok": True, "message": f"Deleted the saved address label for “{name}”", "addresses": address_book.names()})
 
 
 @app.post("/api/travel/parse")

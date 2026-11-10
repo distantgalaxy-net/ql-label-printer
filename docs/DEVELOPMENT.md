@@ -3,7 +3,7 @@
 Read this before changing the code. It explains what we're building, the decisions already made
 and the constraints that aren't obvious from the code.
 
-_Last updated: 2026-11-10 11:00 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Last updated: 2026-11-10 12:10 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 ---
 
@@ -89,6 +89,24 @@ AB1 2CD", `192.168.1.20`, `labels.home.example`).
   media name e.g. `62mm / 2.4"` or `29mm x 90mm / 1.1" x 3.5"`). Needs
   UDP 161 allowed through any firewall. Settings → Check printer shows the
   raw reply for other models.
+- **Menu:** one icon button per page (Lucide icons, ISC licence, inline
+  SVG), with the page name as the tooltip (`title`) and as the page title
+  (`#page-title`) under the menu. Settings sits at the right. The Travel
+  page is called "Luggage label" on screen; its API kind stays `travel`.
+- **Buttons, one rule:** filled (`btn2 primary`) for anything that does
+  something (save, print, check, upload, fill in); outline (`btn2`) only for
+  Cancel and Edit, which just change what you see; red outline
+  (`btn2 danger`) for delete or clear.
+- **Saved items, one layout:** fields first, then a "Saved … labels" group
+  (load list, Save/Update, Delete, and a folding "Manage saved … labels"
+  list with a Delete per row). Address labels are encrypted
+  (`addressbook.py`); food labels live in `settings.food_presets`.
+- **Saved notes:** under the address note and food notes, a row to pick,
+  save or delete a reusable note (`settings.saved_notes`, per page). One
+  shared script (`setUpNoteRow`).
+- **Settings order:** Printer (ending with Test and save), Printer status,
+  Time zone (saves on change; on a new install Test and save also stores
+  it), Temperature unit, Colour, Password.
 - **Print** sits directly under the label preview (no fixed bottom bar),
   so what you see and the button are together.
 - **Messages** appear next to the button that caused them (`say()` in
@@ -294,6 +312,9 @@ image is valid for a model (it raises if the size is wrong).
   read into the flight boxes for checking, then added.
 - 2026-11-08 – Accent colour choice in Settings (green default; blue, red,
   pink, purple, orange, monochrome), each tuned for light and dark themes.
+- 2026-11-10 – Icon menu with page titles; Travel shown as Luggage label;
+  one button rule; Settings reordered with time zone saving on change;
+  saved food labels laid out like saved address labels; saved notes.
 - 2026-11-10 – Saved addresses (encrypted, by name) for quick reprints.
   New dependency `cryptography` (Apache-2.0/BSD, GPL-compatible). Address
   tab reordered: label fields first, then saved addresses, then folding
