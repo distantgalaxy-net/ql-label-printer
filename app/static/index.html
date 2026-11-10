@@ -1,7 +1,7 @@
 <!doctype html>
 <!--
   labelprinter - label printing page (phone-first)
-  Date: 2026-11-10 10:20 GMT (updated; first written 2026-11-07 18:15 GMT)
+  Date: 2026-11-10 11:00 GMT (updated; first written 2026-11-07 18:15 GMT)
   Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
   One form per label type; the preview updates as you type, then Print.
   The Settings tab holds the printer (model, IP address, port), the time
@@ -193,6 +193,15 @@
         </div>
         <p class="msg" id="msg-saved" role="status"></p>
         <p class="small">Saves the whole label under the name, encrypted on this label printer app's server.</p>
+        <!-- Every saved name with its own Delete button (folds away) -->
+        <details id="s-manage" data-remember="labelprinter-open-saved">
+          <summary id="s-manage-title">Manage saved addresses</summary>
+          <div class="inner">
+          <input id="s-search" type="search" placeholder="Search names" autocomplete="off" hidden>
+          <ul class="list" id="s-list"></ul>
+          <p class="small" id="s-none">No saved addresses yet.</p>
+          </div>
+        </details>
       </div>
 
       <!-- 3. Fill in from contacts (folds away). The picker button only
@@ -976,6 +985,35 @@ function fillSaved(selectId) {
   savedAddresses.forEach(a => sel.add(new Option(a.name, a.id)));
   sel.value = selectId || "";
   savedButtons();
+  $("s-manage-title").textContent = `Manage saved addresses (${savedAddresses.length})`;
+  $("s-search").hidden = savedAddresses.length <= 8;
+  listSaved($("s-search").value);
+}
+// The manage list: each saved name with a Delete button, filtered by the search box
+function listSaved(filter) {
+  const list = $("s-list"); list.textContent = "";
+  const f = (filter || "").trim().toLowerCase();
+  const shown = savedAddresses.filter(a => !f || a.name.toLowerCase().includes(f));
+  shown.forEach(a => {
+    const li = document.createElement("li");
+    const name = document.createElement("span"); name.className = "grow"; name.textContent = a.name;
+    const del = document.createElement("button"); del.type = "button"; del.className = "btn2 danger mini"; del.textContent = "Delete";
+    del.addEventListener("click", () => deleteSaved(a));
+    li.append(name, del); list.append(li);
+  });
+  $("s-none").hidden = savedAddresses.length > 0;
+  if (savedAddresses.length && !shown.length) {
+    const li = document.createElement("li"); li.className = "break"; li.textContent = "No names match"; list.append(li);
+  }
+}
+$("s-search").addEventListener("input", e => listSaved(e.target.value));
+// Delete one saved address (after asking); the form is left as it is
+async function deleteSaved(a) {
+  if (!confirm(`Delete the saved address for “${a.name}”?`)) return;
+  const res = await api("DELETE", `/api/addresses/${encodeURIComponent(a.id)}`);
+  if (!res.ok) { say("msg-saved", res.body.message || "Couldn't delete", "bad"); return; }
+  savedAddresses = res.body.addresses; fillSaved();
+  say("msg-saved", res.body.message, "ok");
 }
 async function loadSavedList() {
   const res = await api("GET", "/api/addresses");
@@ -1008,14 +1046,7 @@ $("s-save-address").addEventListener("click", async () => {
   savedAddresses = res.body.addresses; fillSaved(res.body.id);
   say("msg-saved", res.body.message, "ok");
 });
-$("s-delete-address").addEventListener("click", async () => {
-  const match = savedMatch();
-  if (!match || !confirm(`Delete the saved address for “${match.name}”? The form stays as it is.`)) return;
-  const res = await api("DELETE", `/api/addresses/${encodeURIComponent(match.id)}`);
-  if (!res.ok) { say("msg-saved", res.body.message || "Couldn't delete", "bad"); return; }
-  savedAddresses = res.body.addresses; fillSaved();
-  say("msg-saved", res.body.message, "ok");
-});
+$("s-delete-address").addEventListener("click", () => { const match = savedMatch(); if (match) deleteSaved(match); });
 
 // Folding sections remember whether they were left open, in this browser
 document.querySelectorAll("details[data-remember]").forEach(d => {

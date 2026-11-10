@@ -3,7 +3,7 @@
 Print useful labels on a Brother QL label printer from your phone or from
 Home Assistant.
 
-_Updated: 2026-11-10 10:40 GMT · Developer: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Updated: 2026-11-10 11:00 GMT · Developer: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 A small self-hosted web service, run in Docker (for example on a Synology
 NAS). It prints on a network-connected Brother QL printer from a
@@ -235,7 +235,10 @@ save the address (below).
 On the Address tab, **Save this address** keeps the whole label (name,
 address, note and icon) under the name, so you can reprint it later from
 **Load a saved address** without finding the contact again. Saving a name
-that's already saved updates it; **Delete saved address** removes it.
+that's already saved updates it. To delete one, open **Manage saved
+addresses** (every saved name with a **Delete** button), or load it and
+use **Delete saved address**. Deleting removes it from the app for good;
+copies in backups or NAS snapshots made before then aren't affected.
 
 Saved addresses are **encrypted** in `data/addresses.enc`, with the key in
 `data/addresses.key`. Both files are readable only by the app. They aren't

@@ -3,7 +3,7 @@
 Read this before changing the code. It explains what we're building, the decisions already made
 and the constraints that aren't obvious from the code.
 
-_Last updated: 2026-11-10 10:40 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Last updated: 2026-11-10 11:00 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 ---
 
@@ -298,6 +298,9 @@ image is valid for a model (it raises if the size is wrong).
   New dependency `cryptography` (Apache-2.0/BSD, GPL-compatible). Address
   tab reordered: label fields first, then saved addresses, then folding
   sections for contacts and icons (open state remembered per browser).
+  A folding "Manage saved addresses" list gives each name a Delete button
+  (search when > 8). No key rotation on delete: overkill for a home service;
+  the README notes that earlier backups/snapshots keep their copies.
 - 2026-11-10 – Address label: optional small note under the address
   (left or centred); contact card titles/suffixes added to the name;
   privacy note on the Address tab.
