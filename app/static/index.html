@@ -1,7 +1,7 @@
 <!doctype html>
 <!--
   labelprinter - label printing page (phone-first)
-  Date: 2026-11-10 12:30 GMT (updated; first written 2026-11-07 18:15 GMT)
+  Date: 2026-11-10 22:00 GMT (updated; first written 2026-11-07 18:15 GMT)
   Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
   One form per label type; the preview updates as you type, then Print.
   The Settings tab holds the printer (model, IP address, port), the time
@@ -186,17 +186,17 @@
       <label>Address (one line per row)<textarea id="a-address" name="address" placeholder="1 High Street&#10;Anytown&#10;AB1 2CD"></textarea></label>
       <!-- Optional note: printed small, across the full width, under the address -->
       <label>Note (optional)<textarea id="a-note" name="note" style="min-height:60px" placeholder="Please leave with a neighbour"></textarea></label>
-      <!-- Saved notes: reuse delivery instructions / cooking notes -->
-      <div class="noterow" data-notes="address" data-for="a-note">
+      <div class="seg" role="radiogroup" aria-label="Note alignment">
+        <label><input type="radio" name="note_align" value="left" checked> Left</label>
+        <label><input type="radio" name="note_align" value="center"> Centre</label>
+      </div>
+      <!-- Saved notes: reuse a note (and its alignment) on any address label -->
+      <div class="noterow" data-notes="address" data-for="a-note" data-align="note_align">
         <select class="note-pick" aria-label="Saved notes"><option value="">Use a saved note…</option></select>
         <button type="button" class="btn2 primary mini note-save">Save note</button>
         <button type="button" class="btn2 danger mini note-del" hidden>Delete note</button>
       </div>
       <p class="msg" id="msg-note-address" role="status"></p>
-      <div class="seg" role="radiogroup" aria-label="Note alignment">
-        <label><input type="radio" name="note_align" value="left" checked> Left</label>
-        <label><input type="radio" name="note_align" value="center"> Centre</label>
-      </div>
       <div class="iconpick">
         <label>Icon<select id="a-icon" name="icon"><option value="none">None</option></select></label>
         <img class="thumb" id="a-icon-thumb" alt="Selected icon" hidden>
@@ -299,7 +299,7 @@
         <label><span class="unit-label" data-fan>Fan °C</span><input id="f-fan" name="fan" type="number" min="0" inputmode="numeric"></label>
       </div>
       <label>Notes (optional)<textarea id="f-notes" name="notes" style="min-height:60px" placeholder="Stir halfway"></textarea></label>
-      <!-- Saved notes: reuse delivery instructions / cooking notes -->
+      <!-- Saved notes: reuse a cooking note on any food label -->
       <div class="noterow" data-notes="food" data-for="f-notes">
         <select class="note-pick" aria-label="Saved notes"><option value="">Use a saved note…</option></select>
         <button type="button" class="btn2 primary mini note-save">Save note</button>
@@ -354,7 +354,6 @@
 
       <div class="group">
         <h3>Flights</h3>
-        <label>Saved trip<select id="t-trip"><option value="">Load a saved trip…</option></select></label>
         <ul class="list" id="t-legs"></ul>
         <p class="small" id="t-legs-none">No flights yet. Add them below, in any order: they're sorted by date, and a gap of more than a day starts a new journey.</p>
 
@@ -390,16 +389,29 @@
           <p class="msg" id="msg-legs" role="status"></p>
         </div>
         <datalist id="airports"></datalist>
+        <div class="actions"><button type="button" class="btn2 danger" id="t-clear">Clear flights</button></div>
+        <p class="msg" id="msg-clear" role="status"></p>
+      </div>
 
-        <div class="row">
-          <label>Trip name<input id="t-trip-name" maxlength="60" autocomplete="off" placeholder="e.g. Summer holiday"></label>
-        </div>
+      <!-- Saved trips: same layout as saved address and food labels -->
+      <div class="group">
+        <h3>Saved trips</h3>
+        <label>Load a saved trip<select id="t-trip"><option value="">Choose a trip…</option></select></label>
+        <label>Trip name<input id="t-trip-name" maxlength="60" autocomplete="off" placeholder="e.g. Summer holiday"></label>
         <div class="actions">
           <button type="button" class="btn2 primary" id="t-trip-save">Save trip</button>
           <button type="button" class="btn2 danger" id="t-trip-delete" hidden>Delete saved trip</button>
-          <button type="button" class="btn2 danger" id="t-clear">Clear flights</button>
         </div>
         <p class="msg" id="msg-trip" role="status"></p>
+        <p class="small">Saves the flights on this page under the trip name. Your details are saved separately, above.</p>
+        <details id="t-manage" data-remember="labelprinter-open-trips">
+          <summary id="t-manage-title">Manage saved trips</summary>
+          <div class="inner">
+          <input id="t-search" type="search" placeholder="Search trips" autocomplete="off" hidden>
+          <ul class="list" id="t-list"></ul>
+          <p class="small" id="t-none">No saved trips yet.</p>
+          </div>
+        </details>
       </div>
     </form>
 
@@ -412,6 +424,25 @@
       </div>
       <datalist id="b-types"></datalist>
       <p class="small">Prints the smallest label your printer allows (about 13mm on most models).</p>
+      <!-- Saved battery labels: same layout as saved address and food labels -->
+      <div class="group">
+        <h3>Saved battery labels</h3>
+        <label>Load a saved battery label<select id="b-saved"><option value="">Choose a device…</option></select></label>
+        <div class="actions">
+          <button type="button" class="btn2 primary" id="b-save">Save battery label</button>
+          <button type="button" class="btn2 danger" id="b-delete" hidden>Delete saved battery label</button>
+        </div>
+        <p class="msg" id="msg-battery" role="status"></p>
+        <p class="small">Saves the device and battery type under the device name. When you load it, the date is today.</p>
+        <details id="b-manage" data-remember="labelprinter-open-battery">
+          <summary id="b-manage-title">Manage saved battery labels</summary>
+          <div class="inner">
+          <input id="b-search" type="search" placeholder="Search devices" autocomplete="off" hidden>
+          <ul class="list" id="b-list"></ul>
+          <p class="small" id="b-none">No saved battery labels yet.</p>
+          </div>
+        </details>
+      </div>
     </form>
 
     <!-- Network -->
@@ -1091,41 +1122,61 @@ $("s-delete-address").addEventListener("click", () => { const match = savedMatch
 
 // ---- saved notes (address note and food notes) -------------------------
 // Reusable notes, kept per page in settings.saved_notes = {address: [...],
-// food: [...]}. Pick one to put it in the box, Save note to keep what's in
-// the box, Delete note when the box matches a saved one.
-const notesFor = (k) => ((settings.saved_notes || {})[k] || []);
+// food: [...]}, each {text, align}. The address note keeps its alignment
+// (left or centre); food notes are always left. Pick one to put it in the
+// box, Save note to keep what's in the box, Delete note when the box
+// matches a saved one. Older saves were plain text: they read as left.
+const notesFor = (k) => ((settings.saved_notes || {})[k] || []).map(n => typeof n === "string"
+  ? { text: n, align: "left" } : { text: String(n.text || ""), align: n.align === "center" ? "center" : "left" });
 function setUpNoteRow(row) {
   const k = row.dataset.notes, box = $(row.dataset.for), pick = row.querySelector(".note-pick");
   const save = row.querySelector(".note-save"), del = row.querySelector(".note-del"), msg = `msg-note-${k}`;
+  const form = row.closest("form").dataset.kind, alignName = row.dataset.align;
+  // The alignment chosen now ("left" where the page has no choice)
+  const align = () => (alignName && radio(form, alignName)) || "left";
   const short = (t) => { const one = t.replace(/\s+/g, " "); return one.length > 50 ? one.slice(0, 49) + "…" : one; };
+  // Redraw the list and the buttons for what's in the box now
   function refresh() {
     const notes = notesFor(k);
     pick.length = 1;
-    notes.forEach((t, i) => pick.add(new Option(short(t), i)));
-    pick.hidden = !notes.length;
-    const match = notes.indexOf(box.value.trim());
-    del.hidden = match < 0;
-    save.hidden = !box.value.trim() || match >= 0;
+    pick.options[0].text = notes.length ? "Use a saved note…" : "No saved notes yet";
+    pick.disabled = !notes.length;
+    notes.forEach((n, i) => pick.add(new Option(short(n.text) + (alignName && n.align === "center" ? " (centred)" : ""), i)));
+    const text = box.value.trim(), match = notes.find(n => n.text === text);
+    const changed = match && alignName && match.align !== align();
+    del.hidden = !match;
+    // Save note → "Update note" when only the alignment differs, "Note saved" when it's all saved
+    save.textContent = !match ? "Save note" : changed ? "Update note" : "Note saved";
+    save.disabled = !text || (match && !changed);
   }
+  // Save the whole list of notes for this page
   async function store(list, done) {
     const err = await saveSettings({ saved_notes: { ...(settings.saved_notes || {}), [k]: list } });
     if (err) { say(msg, err, "bad"); return; }
     refresh(); say(msg, done, "ok");
   }
   pick.addEventListener("change", () => {
-    const t = notesFor(k)[pick.value];
-    if (t == null) return;
-    box.value = t; pick.value = ""; refresh(); schedulePreview(0);
+    const n = notesFor(k)[pick.value];
+    if (!n) return;
+    box.value = n.text;
+    if (alignName) setRadio(form, alignName, n.align);
+    pick.value = ""; refresh(); schedulePreview(0);
   });
   save.addEventListener("click", () => {
-    const t = box.value.trim();
-    if (t && !notesFor(k).includes(t)) store([...notesFor(k), t], "Note saved – pick it from the list next time");
+    const text = box.value.trim();
+    if (!text) return;
+    const notes = notesFor(k), updating = notes.some(n => n.text === text);
+    const list = notes.filter(n => n.text !== text);
+    list.push({ text, align: align() });
+    store(list, updating ? "Note updated" : "Note saved – choose it from the list on any label");
   });
   del.addEventListener("click", () => {
-    const t = box.value.trim();
-    if (confirm(`Delete this saved note?\n\n${short(t)}`)) store(notesFor(k).filter(n => n !== t), "Saved note deleted");
+    const text = box.value.trim();
+    if (confirm(`Delete this saved note?\n\n${short(text)}`)) store(notesFor(k).filter(n => n.text !== text), "Saved note deleted");
   });
   box.addEventListener("input", refresh);
+  if (alignName) document.querySelectorAll(`form[data-kind="${form}"] input[name="${alignName}"]`)
+    .forEach(r => r.addEventListener("change", refresh));
   row.refresh = refresh;
 }
 document.querySelectorAll(".noterow").forEach(setUpNoteRow);
@@ -1246,6 +1297,29 @@ function convertTemp(value, from, to) {
   const n = Number(value), out = to === "F" ? n * 9 / 5 + 32 : (n - 32) * 5 / 9;
   return String(Math.round(out / 5) * 5);
 }
+// ---- saved-label lists (shared) ---------------------------------------
+// Fill a folding "Manage saved …" list: one row per saved item with a
+// Delete button, a search box once there are more than 8, and the count
+// in the heading. ids: <p>-list, <p>-none, <p>-search, <p>-manage-title.
+//   items:    the saved items      text: (item) => what the row shows
+//   onDelete: (index) => ...       what: e.g. "saved trips" (for the heading)
+function fillManage(p, items, text, onDelete, what) {
+  $(`${p}-manage-title`).textContent = `Manage ${what} (${items.length})`;
+  $(`${p}-search`).hidden = items.length <= 8;
+  const list = $(`${p}-list`); list.textContent = "";
+  const f = $(`${p}-search`).value.trim().toLowerCase();
+  const shown = items.map((item, i) => ({ item, i })).filter(({ item }) => !f || text(item).toLowerCase().includes(f));
+  shown.forEach(({ item, i }) => {
+    const li = document.createElement("li");
+    const name = document.createElement("span"); name.className = "grow"; name.textContent = text(item);
+    const del = document.createElement("button"); del.type = "button"; del.className = "btn2 danger mini"; del.textContent = "Delete";
+    del.addEventListener("click", () => onDelete(i));
+    li.append(name, del); list.append(li);
+  });
+  $(`${p}-none`).hidden = items.length > 0;
+  if (items.length && !shown.length) { const li = document.createElement("li"); li.className = "break"; li.textContent = "Nothing matches"; list.append(li); }
+}
+
 const presets = () => settings.food_presets || [];
 const findPreset = (title) => presets().findIndex(p => (p.title || "").toLowerCase() === title.trim().toLowerCase());
 function fillPresets() {
@@ -1471,49 +1545,123 @@ $("t-paste-fill").addEventListener("click", async () => {
   $("l-add").scrollIntoView({ block: "nearest", behavior: "smooth" });
 });
 
-// ---- Travel tab: saved trips ---------------------------------------------------
+// ---- Luggage tab: saved trips -------------------------------------------
+// Same pattern as saved address and food labels: load from the list, save
+// (or update) under the trip name, delete, and a folding manage list.
 const trips = () => settings.trips || [];
+const findTrip = (name) => trips().findIndex(t => t.name.toLowerCase() === name.trim().toLowerCase());
+const tripText = (t) => `${t.name} (${t.legs.length} flight${t.legs.length === 1 ? "" : "s"})`;
+// Refill the list, the manage list and the buttons; select `selectName` if given
 function fillTrips(selectName) {
   const sel = $("t-trip"); sel.length = 1;
-  trips().forEach((t, i) => sel.add(new Option(`${t.name} (${t.legs.length} flight${t.legs.length === 1 ? "" : "s"})`, i)));
-  const i = trips().findIndex(t => t.name === selectName);
+  trips().forEach((t, i) => sel.add(new Option(tripText(t), i)));
+  const i = selectName ? findTrip(selectName) : -1;
   sel.value = i >= 0 ? String(i) : "";
-  $("t-trip-delete").hidden = i < 0;
+  tripButtons();
+  fillManage("t", trips(), tripText, deleteTrip, "saved trips");
 }
+// "Save trip" becomes "Update saved trip" when the name is already saved
+function tripButtons() {
+  const found = findTrip($("t-trip-name").value) >= 0;
+  $("t-trip-save").textContent = found ? "Update saved trip" : "Save trip";
+  $("t-trip-delete").hidden = !found;
+}
+$("t-trip-name").addEventListener("input", () => { tripButtons(); saveDraft(); });
+$("t-search").addEventListener("input", () => fillTrips());
+// Load a trip: its flights replace the ones on the page
 $("t-trip").addEventListener("change", e => {
   const t = trips()[e.target.value];
-  $("t-trip-delete").hidden = !t;
   if (!t) return;
   legs = t.legs.map(l => ({ ...l })); $("t-trip-name").value = t.name;
-  showLegs(); resetLegForm();
+  showLegs(); resetLegForm(); tripButtons(); saveDraft();
   say("msg-trip", `Loaded “${t.name}”`, "info");
+  showPreview();
 });
+// Save (or update) the flights on the page under the trip name
 $("t-trip-save").addEventListener("click", async () => {
   const name = $("t-trip-name").value.trim();
-  if (!name) { say("msg-trip", "Give the trip a name first", "bad"); return; }
+  if (!name) { say("msg-trip", "Type a trip name first: the flights are saved under it.", "bad"); return; }
   if (!legs.length) { say("msg-trip", "Add some flights first", "bad"); return; }
-  const exists = trips().some(t => t.name.toLowerCase() === name.toLowerCase());
+  const updating = findTrip(name) >= 0;
   const list = trips().filter(t => t.name.toLowerCase() !== name.toLowerCase());
   list.push({ name, legs }); list.sort((a, b) => a.name.localeCompare(b.name));
   const err = await saveSettings({ trips: list });
   if (err) { say("msg-trip", err, "bad"); return; }
   fillTrips(name); saveDraft();
-  say("msg-trip", exists ? `Updated trip “${name}”` : `Saved trip “${name}” – load it from Saved trip any time`, "ok");
+  say("msg-trip", updating ? `Updated the saved trip “${name}”` : `Saved the trip “${name}”`, "ok");
 });
-$("t-trip-delete").addEventListener("click", async () => {
-  const t = trips()[$("t-trip").value];
+// Delete a saved trip (after asking); the flights on the page stay
+async function deleteTrip(i) {
+  const t = trips()[i];
   if (!t || !confirm(`Delete the saved trip “${t.name}”? (The flights on this page stay.)`)) return;
-  const err = await saveSettings({ trips: trips().filter(x => x !== t) });
+  const err = await saveSettings({ trips: trips().filter((_, n) => n !== i) });
   if (err) { say("msg-trip", err, "bad"); return; }
   fillTrips();
-  say("msg-trip", `Deleted trip “${t.name}”`, "ok");
-});
+  say("msg-trip", `Deleted the saved trip “${t.name}”`, "ok");
+}
+$("t-trip-delete").addEventListener("click", () => { const i = findTrip($("t-trip-name").value); if (i >= 0) deleteTrip(i); });
+// Clear the flights on the page (saved trips stay)
 $("t-clear").addEventListener("click", () => {
   if (legs.length && !confirm("Clear all the flights on this page? (Saved trips stay.)")) return;
-  legs = []; $("t-trip-name").value = ""; $("t-trip").value = ""; $("t-trip-delete").hidden = true;
-  $("l-date").value = today(); showLegs(); resetLegForm();
-  say("msg-trip", "Flights cleared", "ok");
+  legs = []; $("t-trip-name").value = ""; $("t-trip").value = ""; tripButtons();
+  $("l-date").value = today(); showLegs(); resetLegForm(); saveDraft();
+  say("msg-clear", "Flights cleared", "ok");
 });
+
+// ---- Battery tab: saved battery labels -----------------------------------
+// The device and battery type, saved under the device name. Loading one
+// sets "Changed on" to today.
+const batteries = () => settings.battery_presets || [];
+const findBattery = (device) => batteries().findIndex(b => b.device.toLowerCase() === device.trim().toLowerCase());
+const batteryText = (b) => b.battery ? `${b.device} · ${b.battery}` : b.device;
+// Refill the list, the manage list and the buttons
+function fillBatteries(selectDevice) {
+  const sel = $("b-saved"); sel.length = 1;
+  batteries().forEach((b, i) => sel.add(new Option(batteryText(b), i)));
+  const i = selectDevice ? findBattery(selectDevice) : -1;
+  sel.value = i >= 0 ? String(i) : "";
+  batteryButtons();
+  fillManage("b", batteries(), batteryText, deleteBattery, "saved battery labels");
+}
+// "Save battery label" becomes "Update …" when the device is already saved
+function batteryButtons() {
+  const found = findBattery($("b-device").value) >= 0;
+  $("b-save").textContent = found ? "Update saved battery label" : "Save battery label";
+  $("b-delete").hidden = !found;
+}
+$("b-device").addEventListener("input", batteryButtons);
+$("b-search").addEventListener("input", () => fillBatteries());
+// Load a saved battery label, with today's date
+$("b-saved").addEventListener("change", e => {
+  const b = batteries()[e.target.value];
+  if (!b) return;
+  $("b-device").value = b.device; $("b-battery").value = b.battery || ""; $("b-changed").value = today();
+  batteryButtons();
+  say("msg-battery", `Loaded “${b.device}” with today's date`, "info");
+  showPreview(); schedulePreview(0);
+});
+// Save (or update) the device and battery type
+$("b-save").addEventListener("click", async () => {
+  const device = $("b-device").value.trim(), battery = $("b-battery").value.trim();
+  if (!device) { say("msg-battery", "Type the device first: the label is saved under it.", "bad"); return; }
+  const updating = findBattery(device) >= 0;
+  const list = batteries().filter(b => b.device.toLowerCase() !== device.toLowerCase());
+  list.push({ device, battery }); list.sort((a, b) => a.device.localeCompare(b.device));
+  const err = await saveSettings({ battery_presets: list });
+  if (err) { say("msg-battery", err, "bad"); return; }
+  fillBatteries(device);
+  say("msg-battery", updating ? `Updated the saved battery label “${device}”` : `Saved the battery label “${device}”`, "ok");
+});
+// Delete a saved battery label (after asking); the form is left as it is
+async function deleteBattery(i) {
+  const b = batteries()[i];
+  if (!b || !confirm(`Delete the saved battery label “${b.device}”?`)) return;
+  const err = await saveSettings({ battery_presets: batteries().filter((_, n) => n !== i) });
+  if (err) { say("msg-battery", err, "bad"); return; }
+  fillBatteries();
+  say("msg-battery", `Deleted the saved battery label “${b.device}”`, "ok");
+}
+$("b-delete").addEventListener("click", () => { const i = findBattery($("b-device").value); if (i >= 0) deleteBattery(i); });
 
 // ---- Settings tab: printer and time zone ---------------------------
 // Read the printer fields as the object the API expects
@@ -1648,6 +1796,7 @@ async function init() {
   refreshNoteRows();
   fillPresets();
   fillTrips();
+  fillBatteries();
   (settings.battery_types || []).forEach(t => $("b-types").append(new Option(t)));
   showMe(false);
   const pr = settings.printer || {};

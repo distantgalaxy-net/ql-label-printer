@@ -1,6 +1,6 @@
 # ------------------------------------------------------------------
 # labelprinter - label print service (web page + API)
-# Date: 2026-11-10 11:40 GMT (updated; first written 2026-11-07 18:10 GMT)
+# Date: 2026-11-10 22:00 GMT (updated; first written 2026-11-07 18:10 GMT)
 # Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
 #
 # Serves the phone-friendly web page and a small JSON API:
@@ -93,8 +93,11 @@ DEFAULT_SETTINGS = {
     "food_presets": [],
     # Saved trips for travel labels: [{"name": ..., "legs": [...]}]
     "trips": [],
-    # Reusable notes per page: delivery instructions, cooking notes
+    # Reusable notes per page: delivery instructions, cooking notes.
+    # Each is {"text": ..., "align": "left" | "center"} (food notes: left)
     "saved_notes": {"address": [], "food": []},
+    # Saved battery labels: [{"device": ..., "battery": ...}] (no date)
+    "battery_presets": [],
     "battery_types": ["CR2032", "CR2450", "CR2", "CR123A", "AA", "AAA", "9V"],
 }
 
@@ -218,7 +221,30 @@ def load_settings():
                                    "shelf_unit": "months", "temp": p.get("temp_c", ""),
                                    "fan": p.get("fan_c", ""), "temp_unit": "C"}
                                   for p in old if isinstance(p, dict)]
+    merged["saved_notes"] = clean_notes(merged.get("saved_notes"))
     return merged
+
+
+def clean_notes(notes):
+    """Saved notes as {page: [{"text", "align"}]}: known pages only, sensible limits.
+
+    Older saves kept plain text notes; they become left-aligned notes.
+    A note saved twice keeps its last alignment.
+    """
+    notes = notes if isinstance(notes, dict) else {}
+    out = {}
+    for page in ("address", "food"):
+        kept = {}
+        for n in notes.get(page) or []:
+            if isinstance(n, str):
+                n = {"text": n}
+            if not isinstance(n, dict):
+                continue
+            text = str(n.get("text") or "").strip()[:500]
+            if text:
+                kept[text] = "center" if n.get("align") == "center" else "left"
+        out[page] = [{"text": t, "align": a} for t, a in list(kept.items())[:100]]
+    return out
 
 
 def setup_problem(s):
@@ -302,16 +328,20 @@ def put_settings():
         return jsonify({"ok": False, "message": f"'{body['accent']}' isn't one of the colours."}), 400
     if "temp_unit" in body and body["temp_unit"] not in ("C", "F"):
         return jsonify({"ok": False, "message": "The temperature unit must be C or F."}), 400
-    for key in ("food_presets", "trips", "battery_types"):
+    for key in ("food_presets", "trips", "battery_types", "battery_presets"):
         if key in body and not isinstance(body[key], list):
             return jsonify({"ok": False, "message": f"'{key}' must be a list."}), 400
     if "saved_notes" in body:
         # {page: [note, ...]}: known pages only, text notes, sensible limits
-        notes = body["saved_notes"]
-        if not isinstance(notes, dict):
+        if not isinstance(body["saved_notes"], dict):
             return jsonify({"ok": False, "message": "'saved_notes' must be an object."}), 400
-        body["saved_notes"] = {k: [str(n).strip()[:500] for n in notes.get(k) or [] if str(n).strip()][:100]
-                               for k in ("address", "food") if isinstance(notes.get(k, []), list)}
+        body["saved_notes"] = clean_notes(body["saved_notes"])
+    if "battery_presets" in body:
+        # Saved battery labels: a device name and a battery type, nothing else
+        body["battery_presets"] = [{"device": str(b.get("device") or "").strip()[:100],
+                                    "battery": str(b.get("battery") or "").strip()[:40]}
+                                   for b in body["battery_presets"]
+                                   if isinstance(b, dict) and str(b.get("device") or "").strip()][:500]
     if "trips" in body:
         # Keep saved trips tidy: a name and well-formed flights only
         body["trips"] = [{"name": str(t.get("name") or "").strip()[:60],

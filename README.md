@@ -43,10 +43,14 @@ shows when you hover over an icon, and as the page title):
 - **Luggage label** (plane): your saved details plus flights, sorted and
   split into journeys; saved trips. (Called `travel` in the API.)
 - **Battery label** (battery): the smallest label your printer allows.
+  Save battery labels (device and battery type) to reuse.
 - **Network device label** (network): name, IP, VLAN, MAC.
 
 Notes you use often (delivery instructions, cooking notes) can be saved
-under the note box and picked again later.
+on their own, separately from any label: type the note and tap **Save
+note** under the note box, then pick it from **Use a saved note…** on any
+other label. An address note keeps its alignment (left or centre); if you
+change the alignment of a saved note, the button becomes **Update note**.
 
 ## Supported printers and labels
 
@@ -166,13 +170,17 @@ Then, if you like:
   time). Or open **Fill in from your booking**, paste one flight copied
   from your confirmation email or itinerary (any layout), and the boxes
   are filled in for you to check before tapping **Add flight**. They're sorted by date, and a gap of more
-  than a day starts a new journey on the label. **Save trip** keeps the
-  whole set to load again later; the flights on the page are also
+  than a day starts a new journey on the label. **Saved trips** (below the
+  flights) keeps the whole set under a trip name to load again later, with
+  a **Manage saved trips** list; the flights on the page are also
   remembered in your browser.
 - **Food label:** fill in a food you make often and tap **Save food
   label**. It keeps everything except the date: loading it again fills in
   today's date and works out the use-by date afresh. **Manage saved food
   labels** lists them all, each with a **Delete** button.
+- **Battery label:** **Save battery label** keeps the device and battery
+  type under the device name. Loading it again fills in today's date.
+  **Manage saved battery labels** lists them, each with a **Delete** button.
 - **Address label → Import contact card** (any device) or **Choose from
   contacts** (Android): fill in an address from your contacts. See
   [Filling in addresses from contacts](#filling-in-addresses-from-contacts).
@@ -389,7 +397,7 @@ data:
 |---|---|
 | `POST /api/preview/<type>` | PNG preview (header `X-Label-Length-mm`) |
 | `POST /api/print/<type>` | Print → `{"ok": true/false, "message": "…"}` (add `"copies": n`). Checks the printer first: if it reports a problem nothing is sent and the reply is HTTP 409 with the reason, plus the full status under `printer`. |
-| `GET/PUT /api/settings` | Saved details (`me`), `food_presets` (saved food labels), `saved_notes` (`{"address": [...], "food": [...]}`), `trips`, battery types, `printer` (`host`, `port`, `model`), `timezone` (e.g. `Europe/London`), `temp_unit` (`C`/`F`), `accent` (`green`/`blue`/`red`/`pink`/`purple`/`orange`/`mono`); `password_set` is read-only |
+| `GET/PUT /api/settings` | Saved details (`me`), `food_presets` (saved food labels), `saved_notes` (`{"address": [{"text", "align"}], "food": [...]}`), `trips`, `battery_presets` (`[{"device", "battery"}]`), battery types, `printer` (`host`, `port`, `model`), `timezone` (e.g. `Europe/London`), `temp_unit` (`C`/`F`), `accent` (`green`/`blue`/`red`/`pink`/`purple`/`orange`/`mono`); `password_set` is read-only |
 | `GET /api/options` | Printer models and time zone names |
 | `GET /api/printer/status` | Is the printer ready and which roll is loaded → `{"ok", "state", "message", "media", "source", "detail"}`; `state` is `ready`, `unavailable`, `cover_open`, `no_media`, `wrong_media` or `error`. Prints nothing. |
 | `POST /api/printer/test` | Check the printer can be reached without printing (body `host`/`port`, or empty to test the saved one) |
