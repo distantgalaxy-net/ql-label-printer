@@ -38,8 +38,8 @@ shows when you hover over an icon, and as the page title):
   contact card, or on Android straight from your contacts. Save whole
   labels to reprint later.
 - **Food label** (cutlery): freezer, fridge or cupboard; frozen/opened
-  date; use-by in days or months; cooking instructions in °C or °F;
-  notes. Save food labels to reuse.
+  date; use-by in days or months; cooking instructions for the oven,
+  air fryer, microwave or hob (°C or °F, or watts); notes. Save food labels to reuse.
 - **Luggage label** (plane): your saved details plus flights, sorted and
   split into journeys; saved trips. (Called `travel` in the API.)
 - **Battery label** (battery): the smallest label your printer allows.
@@ -416,7 +416,7 @@ still works as the old name for `food`).
 
 Fields:
 - **address:** `name`, `address` (lines separated by newlines), `icon`, `note` (optional, printed small under the address), `note_align` (`left` / `center`)
-- **food:** `title`, `storage` (`frozen` / `fridge` / `cupboard`), `date` (YYYY-MM-DD, default today), `shelf` (number), `shelf_unit` (`days` / `months`), `method` (`from_frozen` / `defrost` / `cook` / `none`), `minutes`, `temp`, `fan` (in the Settings unit), `notes`. The old freezer fields `frozen`, `months`, `temp_c`, `fan_c` still work.
+- **food:** `title`, `storage` (`frozen` / `fridge` / `cupboard`), `date` (YYYY-MM-DD, default today), `shelf` (number), `shelf_unit` (`days` / `months`), `method` (`from_frozen` / `defrost` / `cook` / `none`), `appliance` (`oven` / `air_fryer` / `microwave` / `hob`; leave it out for the older oven-style line with no name in front), `minutes`, `temp` (oven, air fryer; in the Settings unit), `fan` (oven), `watts` (microwave), `notes`. The old freezer fields `frozen`, `months`, `temp_c`, `fan_c` still work.
 - **travel:** `name`, `address`, `phone`, and either `legs` (list of `{"date": "YYYY-MM-DD", "flight", "from", "to", "dep": "HHMM", "arr": "HHMM", "plus1": true/false}` – sorted and split into journeys for you) or `flights` (text as typed, blank line between journeys)
 - **battery:** `device`, `battery`, `changed` (YYYY-MM-DD, default today)
 - **network:** `name`, `ip`, `vlan`, `mac`, `notes`

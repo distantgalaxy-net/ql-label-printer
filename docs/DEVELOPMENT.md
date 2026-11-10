@@ -329,6 +329,11 @@ image is valid for a model (it raises if the size is wrong).
 - 2026-11-10 – Food page: Days/Months sits on the same line as the Use
   within number, with the date on its own line above, so the unit clearly
   belongs to Use within.
+- 2026-11-11 – Food cooking instructions: choose Oven, Air fryer,
+  Microwave or Hob; only the matching boxes show (temperature, fan,
+  watts) and the label prints e.g. "Microwave: 5 min @ 900W". Steps
+  and stirring go in the notes (saved notes make these one tap).
+  Requests without `appliance` print as before.
 - 2026-11-10 – Saved addresses (encrypted, by name) for quick reprints.
   New dependency `cryptography` (Apache-2.0/BSD, GPL-compatible). Address
   tab reordered: label fields first, then saved addresses, then folding

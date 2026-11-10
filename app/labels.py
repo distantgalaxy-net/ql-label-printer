@@ -1,6 +1,6 @@
 # ------------------------------------------------------------------
 # labelprinter - label layouts
-# Date: 2026-11-10 09:10 GMT (updated; first written 2026-11-07 18:10 GMT)
+# Date: 2026-11-11 09:00 GMT (updated; first written 2026-11-07 18:10 GMT)
 # Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
 #
 # Turns form data into a black-and-white image the exact width of the
@@ -838,6 +838,8 @@ STORAGE = {
 # Cooking method -> heading line on the label ("cook" = no heading, just
 # the time and temperature; "none" = no cooking instructions at all)
 METHODS = {"from_frozen": "Cook from frozen", "defrost": "Defrost first", "cook": "", "": ""}
+# What the food is cooked in, as printed before the time
+APPLIANCES = {"oven": "Oven", "air_fryer": "Air fryer", "microwave": "Microwave", "hob": "Hob"}
 
 
 def _number(value):
@@ -854,8 +856,12 @@ def food(data):
     from "use within" days or months, optional cooking instructions and notes.
     data: title, storage (frozen | fridge | cupboard), date (YYYY-MM-DD,
           default today), shelf (number), shelf_unit (days | months),
-          method (from_frozen | defrost | cook | none), minutes, temp, fan, notes.
+          method (from_frozen | defrost | cook | none),
+          appliance (oven | air_fryer | microwave | hob), minutes,
+          temp (oven, air fryer), fan (oven), watts (microwave), notes.
     Temperatures are in the unit chosen in Settings (°C or °F).
+    Without an appliance (older saves, older API calls) the line prints as
+    before, with no "Oven:" in front, and uses temp and fan.
     Older freezer fields still work: frozen, months, temp_c, fan_c.
     """
     title = (data.get("title") or "").strip()
@@ -882,10 +888,18 @@ def food(data):
     method = data.get("method") or ""
     if method != "none":
         heading = METHODS.get(method, "")
+        appliance = data.get("appliance") if data.get("appliance") in APPLIANCES else ""
         # Old freezer fields were always °C; new ones use the Settings unit
         temp, fan, sym = data.get("temp"), data.get("fan"), _unit.get()
         if temp in (None, "") and fan in (None, "") and (data.get("temp_c") or data.get("fan_c")):
             temp, fan, sym = data.get("temp_c"), data.get("fan_c"), "C"
+        # Only the settings that make sense for the appliance are printed
+        # (the page may still hold, say, an oven temperature in a hidden box)
+        if appliance not in ("", "oven", "air_fryer"):
+            temp = ""
+        if appliance not in ("", "oven"):
+            fan = ""
+        watts = str(data.get("watts") or "").strip() if appliance == "microwave" else ""
         parts = []
         if str(data.get("minutes") or "").strip():
             parts.append(f"{str(data['minutes']).strip()} min")
@@ -894,9 +908,15 @@ def food(data):
             temps.append(f"{str(temp).strip()}°{sym}")
         if str(fan or "").strip():
             temps.append(f"{str(fan).strip()}°{sym} fan")
+        if watts:
+            temps.append(f"{watts}W")
         if temps:
             parts.append("@ " + " / ".join(temps))
-        cook_lines = [t for t in (heading, "  ".join(parts)) if t]
+        how = "  ".join(parts)
+        # "Oven: 45 min @ 180°C / 160°C fan", or just "Microwave" with no details
+        if appliance:
+            how = f"{APPLIANCES[appliance]}: {how}" if how else APPLIANCES[appliance]
+        cook_lines = [t for t in (heading, how) if t]
         if cook_lines:
             size = fit_size(cook_lines, "sans", 40, usable)
             for i, t in enumerate(cook_lines):

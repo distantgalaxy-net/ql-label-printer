@@ -1,7 +1,7 @@
 <!doctype html>
 <!--
   labelprinter - label printing page (phone-first)
-  Date: 2026-11-10 22:50 GMT (updated; first written 2026-11-07 18:15 GMT)
+  Date: 2026-11-11 09:00 GMT (updated; first written 2026-11-07 18:15 GMT)
   Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
   One form per label type; the preview updates as you type, then Print.
   The Settings tab holds the printer (model, IP address, port), the time
@@ -304,10 +304,23 @@
         <label data-for="fridge cupboard"><input type="radio" name="method" value="cook"> Add instructions</label>
         <label><input type="radio" name="method" value="none"> None</label>
       </div>
-      <div class="row" id="f-cook">
-        <label>Minutes<input id="f-minutes" name="minutes" type="number" min="0" inputmode="numeric"></label>
-        <label><span class="unit-label">Temp °C</span><input id="f-temp" name="temp" type="number" min="0" inputmode="numeric"></label>
-        <label><span class="unit-label" data-fan>Fan °C</span><input id="f-fan" name="fan" type="number" min="0" inputmode="numeric"></label>
+      <!-- What it's cooked in, then only the boxes that make sense for it
+           (data-app lists the appliances a box is shown for). Steps such as
+           "3 min, stir, then 2 min" go in the notes. -->
+      <div id="f-cook" style="display:grid;gap:10px">
+        <span class="fieldcap" id="f-app-label">Cook in</span>
+        <div class="seg" role="radiogroup" aria-labelledby="f-app-label" id="f-appliances" style="margin-top:-6px">
+          <label><input type="radio" name="appliance" value="oven" checked> Oven</label>
+          <label><input type="radio" name="appliance" value="air_fryer"> Air fryer</label>
+          <label><input type="radio" name="appliance" value="microwave"> Microwave</label>
+          <label><input type="radio" name="appliance" value="hob"> Hob</label>
+        </div>
+        <div class="row">
+          <label>Minutes<input id="f-minutes" name="minutes" type="number" min="0" inputmode="numeric"></label>
+          <label data-app="oven air_fryer"><span class="unit-label">Temp °C</span><input id="f-temp" name="temp" type="number" min="0" inputmode="numeric"></label>
+          <label data-app="oven"><span class="unit-label" data-fan>Fan °C</span><input id="f-fan" name="fan" type="number" min="0" inputmode="numeric"></label>
+          <label data-app="microwave">Watts<input id="f-watts" name="watts" type="number" min="0" max="3000" step="50" inputmode="numeric" placeholder="900"></label>
+        </div>
       </div>
       <label>Notes (optional)<textarea id="f-notes" name="notes" style="min-height:60px" placeholder="Stir halfway"></textarea></label>
       <!-- Saved notes: reuse a cooking note on any food label -->
@@ -1296,8 +1309,15 @@ function showStorage(keepChoices) {
   }
   showCook();
 }
-// Hide the minutes/temperature boxes when there are no instructions
-function showCook() { $("f-cook").hidden = radio("food", "method") === "none"; }
+// Hide the cooking boxes when there are no instructions; otherwise show
+// only the boxes for the chosen appliance (temperature for oven and air
+// fryer, fan for oven, watts for microwave, just minutes for the hob)
+function showCook() {
+  $("f-cook").hidden = radio("food", "method") === "none";
+  const app = radio("food", "appliance") || "oven";
+  document.querySelectorAll("#f-cook label[data-app]").forEach(l => l.hidden = !l.dataset.app.split(" ").includes(app));
+}
+document.querySelectorAll('form[data-kind="food"] input[name="appliance"]').forEach(r => r.addEventListener("change", showCook));
 document.querySelectorAll('form[data-kind="food"] input[name="storage"]').forEach(r => r.addEventListener("change", () => showStorage(false)));
 document.querySelectorAll('form[data-kind="food"] input[name="method"]').forEach(r => r.addEventListener("change", showCook));
 
@@ -1359,6 +1379,9 @@ $("f-preset").addEventListener("change", e => {
   $("f-shelf").value = p.shelf ?? "";
   setRadio("food", "shelf_unit", p.shelf_unit || (p.storage === "frozen" || !p.storage ? "months" : "days"));
   setRadio("food", "method", p.method || "none");
+  // Saved before the appliance choice existed: those were all oven
+  setRadio("food", "appliance", p.appliance || "oven");
+  $("f-watts").value = p.watts ?? "";
   $("f-minutes").value = p.minutes ?? "";
   // Saved in the other unit? Convert to the one chosen in Settings
   const from = p.temp_unit || "C", to = settings.temp_unit || "C";
@@ -1376,6 +1399,7 @@ $("f-save").addEventListener("click", async () => {
   const d = formData("food");
   if (!d.title.trim()) { say("msg-food", "Type the food name first", "bad"); return; }
   const preset = { title: d.title.trim(), storage: d.storage, shelf: d.shelf, shelf_unit: d.shelf_unit, method: d.method,
+                   appliance: d.appliance, watts: d.watts,
                    minutes: d.minutes, temp: d.temp, fan: d.fan, temp_unit: settings.temp_unit || "C", notes: d.notes };
   const updating = findPreset(preset.title) >= 0;
   const list = presets().filter(p => p.title.toLowerCase() !== preset.title.toLowerCase());
