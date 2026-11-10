@@ -1,7 +1,7 @@
 <!doctype html>
 <!--
   labelprinter - label printing page (phone-first)
-  Date: 2026-11-09 19:40 GMT (updated; first written 2026-11-07 18:15 GMT)
+  Date: 2026-11-10 09:10 GMT (updated; first written 2026-11-07 18:15 GMT)
   Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
   One form per label type; the preview updates as you type, then Print.
   The Settings tab holds the printer (model, IP address, port), the time
@@ -178,6 +178,7 @@
         <input type="file" id="c-file" accept=".vcf,text/vcard,text/x-vcard" hidden>
       </div>
       <p class="small" id="c-note" hidden></p>
+      <p class="small">Your contacts stay on this device: contact cards and the phone's contact list are read here, in your browser. Only the name and address you choose are sent to this label printer app, to show the preview and print the label. They aren't saved.</p>
       <!-- Shown when a contact card file holds more than one contact -->
       <div class="group" id="c-people" hidden>
         <h3 id="c-people-title">Which contact?</h3>
@@ -194,6 +195,12 @@
       <p class="msg" id="msg-contacts" role="status"></p>
       <label>Name<input id="a-name" name="name" autocomplete="off" placeholder="Alex Example"></label>
       <label>Address (one line per row)<textarea id="a-address" name="address" placeholder="1 High Street&#10;Anytown&#10;AB1 2CD"></textarea></label>
+      <!-- Optional note: printed small, across the full width, under the address -->
+      <label>Note (optional)<textarea id="a-note" name="note" style="min-height:60px" placeholder="Please leave with a neighbour"></textarea></label>
+      <div class="seg" role="radiogroup" aria-label="Note alignment">
+        <label><input type="radio" name="note_align" value="left" checked> Left</label>
+        <label><input type="radio" name="note_align" value="center"> Centre</label>
+      </div>
       <div class="iconpick">
         <label>Icon<select id="a-icon" name="icon"><option value="none">None</option></select></label>
         <img class="thumb" id="a-icon-thumb" alt="Selected icon" hidden>
@@ -828,6 +835,8 @@ function parseVCards(text) {
       // family;given;additional;prefix;suffix -> "prefix given additional family suffix"
       const [family = "", given = "", extra = "", prefix = "", suffix = ""] = vSplit(value);
       card.n = [prefix, given, extra, family, suffix].map(x => x.trim()).filter(Boolean).join(" ");
+      card.prefix = prefix.trim();         // title, e.g. "Dr", "Mrs"
+      card.suffix = suffix.trim();         // e.g. "OBE", "Jr"
     } else if (prop === "ADR") {
       // PO box;extended (flat/suite);street;town;region;postcode;country
       const [pobox = "", ext = "", street = "", city = "", region = "", postalCode = "", country = ""] = vSplit(value);
@@ -842,9 +851,22 @@ function parseVCards(text) {
   // Tidy: a name for each card, and a readable label for each address
   const titled = (t) => t ? t.charAt(0).toUpperCase() + t.slice(1) : "";
   return cards.map(c => ({
-    name: c.fn || c.n,
+    name: nameWithTitle(c),
     addresses: c.adrs.map(a => ({ ...a, label: titled(c.labels[a.group] || a.type) })),
   }));
+}
+// The name to print: the card's display name (FN), with the title (e.g.
+// "Dr") added at the front and any suffix (e.g. "OBE") at the end when the
+// display name leaves them out. It all goes into the one Name box, so it
+// can be edited if the name should be written another way.
+function nameWithTitle(c) {
+  let name = c.fn || c.n || "";
+  if (!c.fn) return name;                          // c.n already has them
+  const same = (a, b) => a.replace(/\./g, "").toLowerCase() === b.replace(/\./g, "").toLowerCase();
+  const words = name.split(/\s+/);
+  if (c.prefix && !same(words[0] || "", c.prefix.split(/\s+/)[0])) name = `${c.prefix} ${name}`;
+  if (c.suffix && !same(words[words.length - 1] || "", c.suffix.split(/\s+/).pop())) name = `${name} ${c.suffix}`;
+  return name;
 }
 // Read a chosen or dropped file and offer its contacts
 async function importContactFile(file) {

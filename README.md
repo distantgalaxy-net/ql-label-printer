@@ -3,7 +3,7 @@
 Print useful labels on a Brother QL label printer from your phone or from
 Home Assistant.
 
-_Updated: 2026-11-09 20:30 GMT · Developer: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Updated: 2026-11-10 09:30 GMT · Developer: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 A small self-hosted web service, run in Docker (for example on a Synology
 NAS). It prints on a network-connected Brother QL printer from a
@@ -209,7 +209,9 @@ the form, and nothing is saved or uploaded.
 - **iPhone:** Contacts → open the contact → **Share Contact** → **Save to
   Files**, then tap **Import contact card**.
 
-On a computer you can also drop the file onto the Address tab. A file can
+On a computer you can also drop the file onto the Address tab. A
+contact's title (e.g. *Dr*) and suffix (e.g. *OBE*) are added to the name,
+which you can edit before printing. A file can
 hold many contacts (e.g. a whole Google export): you'll get a list of
 names to choose from, with a search box for long lists. The file is read
 in your browser and never sent to the server.
@@ -222,6 +224,10 @@ shares names, emails and phone numbers – import a contact card instead.)
 
 If a contact has more than one address you're asked which one; there's
 never a default.
+
+**Privacy:** contact cards and the phone's contact list are read in your
+browser. Only the name and address you choose are sent to the label
+printer app (to show the preview and print), and they aren't saved.
 
 ## Optional password
 
@@ -368,7 +374,7 @@ login session or HTTP Basic auth, and answers `401` otherwise.
 still works as the old name for `food`).
 
 Fields:
-- **address:** `name`, `address` (lines separated by newlines), `icon`
+- **address:** `name`, `address` (lines separated by newlines), `icon`, `note` (optional, printed small under the address), `note_align` (`left` / `center`)
 - **food:** `title`, `storage` (`frozen` / `fridge` / `cupboard`), `date` (YYYY-MM-DD, default today), `shelf` (number), `shelf_unit` (`days` / `months`), `method` (`from_frozen` / `defrost` / `cook` / `none`), `minutes`, `temp`, `fan` (in the Settings unit), `notes`. The old freezer fields `frozen`, `months`, `temp_c`, `fan_c` still work.
 - **travel:** `name`, `address`, `phone`, and either `legs` (list of `{"date": "YYYY-MM-DD", "flight", "from", "to", "dep": "HHMM", "arr": "HHMM", "plus1": true/false}` – sorted and split into journeys for you) or `flights` (text as typed, blank line between journeys)
 - **battery:** `device`, `battery`, `changed` (YYYY-MM-DD, default today)

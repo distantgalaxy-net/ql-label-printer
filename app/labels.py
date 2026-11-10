@@ -1,6 +1,6 @@
 # ------------------------------------------------------------------
 # labelprinter - label layouts
-# Date: 2026-11-09 19:40 GMT (updated; first written 2026-11-07 18:10 GMT)
+# Date: 2026-11-10 09:10 GMT (updated; first written 2026-11-07 18:10 GMT)
 # Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
 #
 # Turns form data into a black-and-white image the exact width of the
@@ -718,10 +718,56 @@ def name_lines(name, width):
     return [{"text": t, "role": "cond", "size": best_size, "spacing": 1.05} for t in best]
 
 
+NOTE_SIZE = 28          # the optional note's font size (address text is 42-48)
+
+
+def wrap_text(text, role, size, width):
+    """Split text into lines no wider than width dots, breaking between words.
+
+    New lines typed by the user are kept. A single word too long for a line
+    is put on its own line (fit_size isn't used, so the note stays small).
+    """
+    out = []
+    for para in (text or "").splitlines():
+        line = ""
+        for word in para.split():
+            trial = f"{line} {word}".strip()
+            if line and text_width(trial, role, size) > width:
+                out.append(line)
+                line = word
+            else:
+                line = trial
+        if line:
+            out.append(line)
+    return out
+
+
 def address(data):
     """
-    Address label: large condensed name, address lines underneath,
-    optional icon on the left (gift, birthday cake, Christmas tree...).
+    Address label: the name and address (see _address_block), then an
+    optional note underneath across the full width, in much smaller text,
+    left-aligned or centred.
+    data: name, address, icon, note (multi-line), note_align (left | center)
+    """
+    block = _address_block(data)
+    note_lines = wrap_text(data.get("note") or "", "sans", NOTE_SIZE, WIDTH - 2 * SIDE)
+    if not note_lines:
+        return block
+    align = "center" if data.get("note_align") == "center" else "left"
+    note = draw_lines([{"text": t, "role": "sans", "size": NOTE_SIZE, "align": align, "spacing": 1.15}
+                       for t in note_lines], height_pad=TOP)
+    # The block already ends with TOP of space; trim most of it so the note sits close
+    gap = TOP // 3
+    img = Image.new("L", (WIDTH, block.height - TOP + gap + note.height - TOP), 255)
+    img.paste(block.crop((0, 0, WIDTH, block.height - TOP + gap)), (0, 0))
+    img.paste(note.crop((0, TOP, WIDTH, note.height)), (0, block.height - TOP + gap))
+    return img
+
+
+def _address_block(data):
+    """
+    Address label without its note: large condensed name, address lines
+    underneath, optional icon on the left (gift, birthday cake, Christmas tree...).
     data: name, address (multi-line), icon
 
     Two layouts when there's an icon:

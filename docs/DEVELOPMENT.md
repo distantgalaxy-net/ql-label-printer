@@ -3,7 +3,7 @@
 Read this before changing the code. It explains what we're building, the decisions already made
 and the constraints that aren't obvious from the code.
 
-_Last updated: 2026-11-09 20:00 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Last updated: 2026-11-10 09:30 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 ---
 
@@ -24,7 +24,8 @@ AB1 2CD", `192.168.1.20`, `labels.home.example`).
 
 **Built:**
 - Flask web page + JSON API, rendered with Pillow, printed with `brother_ql_next`.
-- Label types: `address` (optional icon – 18 built-ins drawn in code, plus
+- Label types: `address` (optional note under the address: full width,
+  small text, left or centred; optional icon – 18 built-ins drawn in code, plus
   the user's own uploaded/deleted in the page, names must be new; long
   names move above the icon or wrap onto two lines), `food` (freezer/fridge/cupboard, use-by in days or months,
   cooking instructions, notes, presets; `freezer` is an API alias),
@@ -49,7 +50,11 @@ AB1 2CD", `192.168.1.20`, `labels.home.example`).
   in the browser (`parseVCards` in `index.html`: vCard 2.1/3.0/4.0,
   folded lines, quoted-printable, Apple `itemN.X-ABLabel` labels). Never
   uploaded or stored. Works on every device; computers can drop the file
-  on the Address tab. Several contacts → name list (search when > 8).
+  on the Address tab. Several contacts → name list (search when > 8). The
+  name is FN plus N's title (prefix) and suffix when FN leaves them out
+  (`nameWithTitle`), all in the one Name box so it can be edited. Only the
+  chosen name and address reach the server (preview/print); nothing is
+  stored. The Address tab says so.
 - **Contact picker** (Address tab, Android only): the browser's Contact Picker API
   (`navigator.contacts.select(["name","address"])`), all in the page – no
   server code, nothing stored. Shown only when the API exists, the page is
@@ -283,6 +288,9 @@ image is valid for a model (it raises if the size is wrong).
   read into the flight boxes for checking, then added.
 - 2026-11-08 – Accent colour choice in Settings (green default; blue, red,
   pink, purple, orange, monochrome), each tuned for light and dark themes.
+- 2026-11-10 – Address label: optional small note under the address
+  (left or centred); contact card titles/suffixes added to the name;
+  privacy note on the Address tab.
 - 2026-11-09 – v1.2.0: everything from 1.1.1–1.1.15 (food labels, custom
   icons, flight builder, colours, contacts, printer status, new icons).
 - 2026-11-09 – Icon uploads must use a new name: one already used by the
