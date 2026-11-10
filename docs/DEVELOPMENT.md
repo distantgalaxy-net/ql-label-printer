@@ -326,6 +326,9 @@ image is valid for a model (it raises if the size is wrong).
   labels (device and battery type, `battery_presets`).
 - 2026-11-10 – Address page order: label fields, then Fill in from your
   contacts, then Saved address labels, then Your own icons.
+- 2026-11-10 – Food page: Days/Months sits on the same line as the Use
+  within number, with the date on its own line above, so the unit clearly
+  belongs to Use within.
 - 2026-11-10 – Saved addresses (encrypted, by name) for quick reprints.
   New dependency `cryptography` (Apache-2.0/BSD, GPL-compatible). Address
   tab reordered: label fields first, then saved addresses, then folding

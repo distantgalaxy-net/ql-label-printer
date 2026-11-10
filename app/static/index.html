@@ -1,7 +1,7 @@
 <!doctype html>
 <!--
   labelprinter - label printing page (phone-first)
-  Date: 2026-11-10 22:30 GMT (updated; first written 2026-11-07 18:15 GMT)
+  Date: 2026-11-10 22:50 GMT (updated; first written 2026-11-07 18:15 GMT)
   Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
   One form per label type; the preview updates as you type, then Print.
   The Settings tab holds the printer (model, IP address, port), the time
@@ -82,6 +82,12 @@
     border-radius: 8px; padding: 8px 10px; background: var(--field); cursor: pointer; }
   .seg label:has(input:checked) { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
   .seg input { width: auto; }
+  /* Use within (food): caption, then the number and Days/Months side by side */
+  .within { display: grid; gap: 4px; }
+  .fieldcap { font-size: .9rem; color: var(--muted); }
+  .withinrow { display: flex; gap: 8px; align-items: stretch; }
+  .withinrow > input { width: 90px; flex: none; }
+  .withinrow .seg { flex-wrap: nowrap; }
   /* Radio buttons and tick boxes follow the chosen accent colour */
   input[type="radio"], input[type="checkbox"] { accent-color: var(--accent); }
   .check { display: flex; align-items: center; gap: 8px; color: var(--fg); }
@@ -278,13 +284,18 @@
         <label><input type="radio" name="storage" value="cupboard"> Cupboard</label>
       </div>
       <label>Food<input id="f-title" name="title" autocomplete="off" placeholder="Beef chilli"></label>
-      <div class="row">
-        <label><span id="f-date-label">Frozen on</span><input id="f-date" name="date" type="date"></label>
-        <label>Use within<input id="f-shelf" name="shelf" type="number" min="0" max="999" inputmode="numeric"></label>
-      </div>
-      <div class="seg" role="radiogroup" aria-label="Use within days or months">
-        <label><input type="radio" name="shelf_unit" value="days"> Days</label>
-        <label><input type="radio" name="shelf_unit" value="months" checked> Months</label>
+      <label><span id="f-date-label">Frozen on</span><input id="f-date" name="date" type="date"></label>
+      <!-- Use within: the number and its unit (days or months) on one line,
+           so the unit clearly belongs to it -->
+      <div class="within" role="group" aria-labelledby="f-within-label">
+        <span class="fieldcap" id="f-within-label">Use within</span>
+        <div class="withinrow">
+          <input id="f-shelf" name="shelf" type="number" min="0" max="999" inputmode="numeric" aria-labelledby="f-within-label">
+          <div class="seg" role="radiogroup" aria-label="Days or months">
+            <label><input type="radio" name="shelf_unit" value="days"> Days</label>
+            <label><input type="radio" name="shelf_unit" value="months" checked> Months</label>
+          </div>
+        </div>
       </div>
       <h2>Cooking instructions</h2>
       <div class="seg" role="radiogroup" aria-label="How to cook" id="f-methods">
