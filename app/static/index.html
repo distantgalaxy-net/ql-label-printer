@@ -1,7 +1,7 @@
 <!doctype html>
 <!--
   labelprinter - label printing page (phone-first)
-  Date: 2026-11-10 22:00 GMT (updated; first written 2026-11-07 18:15 GMT)
+  Date: 2026-11-10 22:30 GMT (updated; first written 2026-11-07 18:15 GMT)
   Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
   One form per label type; the preview updates as you type, then Print.
   The Settings tab holds the printer (model, IP address, port), the time
@@ -202,28 +202,7 @@
         <img class="thumb" id="a-icon-thumb" alt="Selected icon" hidden>
       </div>
 
-      <!-- 2. Saved addresses: reprint without finding the contact again -->
-      <div class="group">
-        <h3>Saved address labels</h3>
-        <label>Load a saved address label<select id="s-saved"><option value="">Choose a name…</option></select></label>
-        <div class="actions">
-          <button type="button" class="btn2 primary" id="s-save-address">Save address label</button>
-          <button type="button" class="btn2 danger" id="s-delete-address" hidden>Delete saved address label</button>
-        </div>
-        <p class="msg" id="msg-saved" role="status"></p>
-        <p class="small">Saves the whole label (name, address, note and icon) under the name, encrypted on this label printer app's server.</p>
-        <!-- Every saved name with its own Delete button (folds away) -->
-        <details id="s-manage" data-remember="labelprinter-open-saved">
-          <summary id="s-manage-title">Manage saved address labels</summary>
-          <div class="inner">
-          <input id="s-search" type="search" placeholder="Search names" autocomplete="off" hidden>
-          <ul class="list" id="s-list"></ul>
-          <p class="small" id="s-none">No saved address labels yet.</p>
-          </div>
-        </details>
-      </div>
-
-      <!-- 3. Fill in from contacts (folds away). The picker button only
+      <!-- 2. Fill in from contacts (folds away). The picker button only
            shows where it can share addresses (Chrome on Android over
            HTTPS); importing a contact card works everywhere -->
       <details id="c-section" data-remember="labelprinter-open-contacts">
@@ -252,6 +231,27 @@
         <p class="small">Your contacts stay on this device: contact cards and the phone's contact list are read here, in your browser. Only the name and address you choose are sent to this label printer app, to show the preview and print the label. They're only kept if you choose Save address label.</p>
         </div>
       </details>
+
+      <!-- 3. Saved addresses: reprint without finding the contact again -->
+      <div class="group">
+        <h3>Saved address labels</h3>
+        <label>Load a saved address label<select id="s-saved"><option value="">Choose a name…</option></select></label>
+        <div class="actions">
+          <button type="button" class="btn2 primary" id="s-save-address">Save address label</button>
+          <button type="button" class="btn2 danger" id="s-delete-address" hidden>Delete saved address label</button>
+        </div>
+        <p class="msg" id="msg-saved" role="status"></p>
+        <p class="small">Saves the whole label (name, address, note and icon) under the name, encrypted on this label printer app's server.</p>
+        <!-- Every saved name with its own Delete button (folds away) -->
+        <details id="s-manage" data-remember="labelprinter-open-saved">
+          <summary id="s-manage-title">Manage saved address labels</summary>
+          <div class="inner">
+          <input id="s-search" type="search" placeholder="Search names" autocomplete="off" hidden>
+          <ul class="list" id="s-list"></ul>
+          <p class="small" id="s-none">No saved address labels yet.</p>
+          </div>
+        </details>
+      </div>
 
       <!-- 4. Your own icons (folds away) -->
       <details id="i-manage" data-remember="labelprinter-open-icons">

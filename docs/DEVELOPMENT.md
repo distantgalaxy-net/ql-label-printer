@@ -324,6 +324,8 @@ image is valid for a model (it raises if the size is wrong).
 - 2026-11-10 – Saved notes keep their alignment; Saved trips moved into
   their own group under Flights, with a manage list; saved battery
   labels (device and battery type, `battery_presets`).
+- 2026-11-10 – Address page order: label fields, then Fill in from your
+  contacts, then Saved address labels, then Your own icons.
 - 2026-11-10 – Saved addresses (encrypted, by name) for quick reprints.
   New dependency `cryptography` (Apache-2.0/BSD, GPL-compatible). Address
   tab reordered: label fields first, then saved addresses, then folding
