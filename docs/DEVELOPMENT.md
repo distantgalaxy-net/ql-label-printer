@@ -3,7 +3,7 @@
 Read this before changing the code. It explains what we're building, the decisions already made
 and the constraints that aren't obvious from the code.
 
-_Last updated: 2026-11-10 09:30 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Last updated: 2026-11-10 10:40 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 ---
 
@@ -148,6 +148,11 @@ covers every device without either.
 - Never return or log the password hash; `GET /api/settings` only exposes
   `password_set`. `auth.json` and `secret.key` are written with mode 600
   and are git-ignored. Changing/removing the password needs the current one.
+- **Saved addresses** (`app/addressbook.py`, `/api/addresses`): encrypted
+  with Fernet (`cryptography`) in `data/addresses.enc`, key in
+  `data/addresses.key`, both mode 600 and git/Docker-ignored. Never put
+  them in `settings.json` or `/api/settings`; the list endpoint returns
+  names only. Encryption, not hashing, because they must be printable.
 - `RESET_PASSWORD=true` (env) removes the password at start-up – the
   documented recovery path.
 
@@ -168,6 +173,7 @@ app/main.py        Flask routes, settings load/save (atomic write), login gate
 app/auth.py        Optional password: hash storage, cookie key, reset
 app/labels.py      All label layouts + built-in icons (drawn with Pillow)
 app/printer.py     Image -> QL raster -> send to printer; models; address checks
+app/addressbook.py Saved address labels, encrypted on disk
 app/status.py      Printer ready? Roll loaded? (connection, ESC i S, SNMP)
 app/static/index.html  Phone-first page (vanilla JS, no build step)
 app/static/login.html  Password page (only used when a password is set)
@@ -288,6 +294,10 @@ image is valid for a model (it raises if the size is wrong).
   read into the flight boxes for checking, then added.
 - 2026-11-08 – Accent colour choice in Settings (green default; blue, red,
   pink, purple, orange, monochrome), each tuned for light and dark themes.
+- 2026-11-10 – Saved addresses (encrypted, by name) for quick reprints.
+  New dependency `cryptography` (Apache-2.0/BSD, GPL-compatible). Address
+  tab reordered: label fields first, then saved addresses, then folding
+  sections for contacts and icons (open state remembered per browser).
 - 2026-11-10 – Address label: optional small note under the address
   (left or centred); contact card titles/suffixes added to the name;
   privacy note on the Address tab.

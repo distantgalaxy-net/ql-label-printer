@@ -1,7 +1,7 @@
 <!doctype html>
 <!--
   labelprinter - label printing page (phone-first)
-  Date: 2026-11-10 09:10 GMT (updated; first written 2026-11-07 18:15 GMT)
+  Date: 2026-11-10 10:20 GMT (updated; first written 2026-11-07 18:15 GMT)
   Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
   One form per label type; the preview updates as you type, then Print.
   The Settings tab holds the printer (model, IP address, port), the time
@@ -169,30 +169,7 @@
   <div class="card">
     <!-- Address -->
     <form data-kind="address" hidden>
-      <!-- Contacts: the picker button only shows where it can share
-           addresses (Chrome on Android over HTTPS); importing a contact
-           card works everywhere -->
-      <div class="actions">
-        <button type="button" class="btn2 primary" id="c-pick" hidden>Choose from contacts</button>
-        <button type="button" class="btn2" id="c-import">Import contact card</button>
-        <input type="file" id="c-file" accept=".vcf,text/vcard,text/x-vcard" hidden>
-      </div>
-      <p class="small" id="c-note" hidden></p>
-      <p class="small">Your contacts stay on this device: contact cards and the phone's contact list are read here, in your browser. Only the name and address you choose are sent to this label printer app, to show the preview and print the label. They aren't saved.</p>
-      <!-- Shown when a contact card file holds more than one contact -->
-      <div class="group" id="c-people" hidden>
-        <h3 id="c-people-title">Which contact?</h3>
-        <input id="c-search" type="search" placeholder="Search names" autocomplete="off" hidden>
-        <ul class="list" id="c-names"></ul>
-        <div class="actions"><button type="button" class="btn2" id="c-people-cancel">Cancel</button></div>
-      </div>
-      <!-- Shown when the chosen contact has more than one address -->
-      <div class="group" id="c-choose" hidden>
-        <h3 id="c-choose-title">Which address?</h3>
-        <ul class="list" id="c-addresses"></ul>
-        <div class="actions"><button type="button" class="btn2" id="c-cancel">Cancel</button></div>
-      </div>
-      <p class="msg" id="msg-contacts" role="status"></p>
+      <!-- 1. The label itself: what most visits are about -->
       <label>Name<input id="a-name" name="name" autocomplete="off" placeholder="Alex Example"></label>
       <label>Address (one line per row)<textarea id="a-address" name="address" placeholder="1 High Street&#10;Anytown&#10;AB1 2CD"></textarea></label>
       <!-- Optional note: printed small, across the full width, under the address -->
@@ -205,7 +182,51 @@
         <label>Icon<select id="a-icon" name="icon"><option value="none">None</option></select></label>
         <img class="thumb" id="a-icon-thumb" alt="Selected icon" hidden>
       </div>
-      <details id="i-manage">
+
+      <!-- 2. Saved addresses: reprint without finding the contact again -->
+      <div class="group">
+        <h3>Saved addresses</h3>
+        <label>Load a saved address<select id="s-saved"><option value="">Choose a name…</option></select></label>
+        <div class="actions">
+          <button type="button" class="btn2 primary" id="s-save-address">Save this address</button>
+          <button type="button" class="btn2 danger" id="s-delete-address" hidden>Delete saved address</button>
+        </div>
+        <p class="msg" id="msg-saved" role="status"></p>
+        <p class="small">Saves the whole label under the name, encrypted on this label printer app's server.</p>
+      </div>
+
+      <!-- 3. Fill in from contacts (folds away). The picker button only
+           shows where it can share addresses (Chrome on Android over
+           HTTPS); importing a contact card works everywhere -->
+      <details id="c-section" data-remember="labelprinter-open-contacts">
+        <summary>Fill in from your contacts</summary>
+        <div class="inner">
+        <div class="actions">
+          <button type="button" class="btn2 primary" id="c-pick" hidden>Choose from contacts</button>
+          <button type="button" class="btn2" id="c-import">Import contact card</button>
+          <input type="file" id="c-file" accept=".vcf,text/vcard,text/x-vcard" hidden>
+        </div>
+        <p class="small" id="c-note" hidden></p>
+        <!-- Shown when a contact card file holds more than one contact -->
+        <div class="group" id="c-people" hidden>
+          <h3 id="c-people-title">Which contact?</h3>
+          <input id="c-search" type="search" placeholder="Search names" autocomplete="off" hidden>
+          <ul class="list" id="c-names"></ul>
+          <div class="actions"><button type="button" class="btn2" id="c-people-cancel">Cancel</button></div>
+        </div>
+        <!-- Shown when the chosen contact has more than one address -->
+        <div class="group" id="c-choose" hidden>
+          <h3 id="c-choose-title">Which address?</h3>
+          <ul class="list" id="c-addresses"></ul>
+          <div class="actions"><button type="button" class="btn2" id="c-cancel">Cancel</button></div>
+        </div>
+        <p class="msg" id="msg-contacts" role="status"></p>
+        <p class="small">Your contacts stay on this device: contact cards and the phone's contact list are read here, in your browser. Only the name and address you choose are sent to this label printer app, to show the preview and print the label. They're only kept if you choose Save this address.</p>
+        </div>
+      </details>
+
+      <!-- 4. Your own icons (folds away) -->
+      <details id="i-manage" data-remember="labelprinter-open-icons">
         <summary>Your own icons (upload or delete)</summary>
         <div class="inner">
         <p class="small">Upload any picture. It's turned into a black-and-white square (about 16mm on the label): white margins are trimmed and light colours become white. Bold, simple shapes on a plain background work best. Icons are saved on this server only.</p>
@@ -734,13 +755,18 @@ function addressChoices(addresses) {
   });
   return out;
 }
-// Fill the form with a name and one address, then refresh the preview
+// Fill the form with a name and one address, refresh the preview, and
+// take the user back up to it (the contacts section is below the fields)
 function useContact(name, lines) {
   if (name) $("a-name").value = name;
   $("a-address").value = lines.join("\n");
   $("c-choose").hidden = true; $("c-people").hidden = true;
+  savedButtons();
   schedulePreview(0);
+  showPreview();
 }
+// Scroll so the label preview and Print button are in view
+function showPreview() { $("preview-box").scrollIntoView({ block: "start", behavior: "smooth" }); }
 // Fill in the address straight away if there's one, or list them all and
 // let the user choose (there's never a default)
 function offerAddresses(name, choices) {
@@ -931,6 +957,71 @@ $("c-file").addEventListener("change", e => { importContactFile(e.target.files[0
     importContactFile(e.dataTransfer.files[0]);
   });
 })();
+
+// ---- Address tab: saved addresses ---------------------------------------
+// Whole address labels saved under the name, encrypted on the server
+// (addressbook.py). The page only gets the list of names, plus one full
+// address when it's picked.
+let savedAddresses = [];               // [{id, name}]
+// Find a saved address with the name in the Name box (ignoring capitals)
+const savedMatch = () => savedAddresses.find(a => a.name.toLowerCase() === $("a-name").value.trim().toLowerCase());
+// "Save" or "Update", and Delete only when the name is already saved
+function savedButtons() {
+  const match = savedMatch();
+  $("s-save-address").textContent = match ? "Update saved address" : "Save this address";
+  $("s-delete-address").hidden = !match;
+}
+function fillSaved(selectId) {
+  const sel = $("s-saved"); sel.length = 1;
+  savedAddresses.forEach(a => sel.add(new Option(a.name, a.id)));
+  sel.value = selectId || "";
+  savedButtons();
+}
+async function loadSavedList() {
+  const res = await api("GET", "/api/addresses");
+  savedAddresses = res.ok ? res.body.addresses : [];
+  fillSaved();
+  if (!res.ok && res.body.message) say("msg-saved", res.body.message, "bad");
+}
+$("a-name").addEventListener("input", savedButtons);
+// Load one: fill every field, then show the preview
+$("s-saved").addEventListener("change", async e => {
+  if (!e.target.value) return;
+  const res = await api("GET", `/api/addresses/${encodeURIComponent(e.target.value)}`);
+  if (!res.ok) { say("msg-saved", res.body.message || "Couldn't load that address", "bad"); return; }
+  const a = res.body.address;
+  $("a-name").value = a.name || ""; $("a-address").value = a.address || ""; $("a-note").value = a.note || "";
+  setRadio("address", "note_align", a.note_align === "center" ? "center" : "left");
+  $("a-icon").value = icons.some(i => i.name === a.icon) ? a.icon : "none"; showIconThumb();
+  savedButtons();
+  say("msg-saved", `Loaded “${a.name}”`, "info");
+  schedulePreview(0);
+  showPreview();
+});
+// Save (or update) the label as it is now, under the name
+$("s-save-address").addEventListener("click", async () => {
+  const d = formData("address");
+  if (!d.name.trim()) { say("msg-saved", "Type the name first: the address is saved under it", "bad"); return; }
+  const res = await api("PUT", "/api/addresses", { name: d.name, address: d.address, icon: d.icon === "none" ? "" : d.icon,
+                                                   note: d.note, note_align: d.note_align });
+  if (!res.ok) { say("msg-saved", res.body.message || "Couldn't save the address", "bad"); return; }
+  savedAddresses = res.body.addresses; fillSaved(res.body.id);
+  say("msg-saved", res.body.message, "ok");
+});
+$("s-delete-address").addEventListener("click", async () => {
+  const match = savedMatch();
+  if (!match || !confirm(`Delete the saved address for “${match.name}”? The form stays as it is.`)) return;
+  const res = await api("DELETE", `/api/addresses/${encodeURIComponent(match.id)}`);
+  if (!res.ok) { say("msg-saved", res.body.message || "Couldn't delete", "bad"); return; }
+  savedAddresses = res.body.addresses; fillSaved();
+  say("msg-saved", res.body.message, "ok");
+});
+
+// Folding sections remember whether they were left open, in this browser
+document.querySelectorAll("details[data-remember]").forEach(d => {
+  try { d.open = localStorage.getItem(d.dataset.remember) === "1"; } catch (e) {}
+  d.addEventListener("toggle", () => { try { localStorage.setItem(d.dataset.remember, d.open ? "1" : "0"); } catch (e) {} });
+});
 
 // ---- Address tab: icons -----------------------------------------------
 const titleCase = (n) => n.charAt(0).toUpperCase() + n.slice(1);
@@ -1403,6 +1494,7 @@ async function init() {
   try { icons = await (await fetch("/api/icons")).json(); } catch (e) { icons = []; }
   fillIcons("none");
   setUpContacts();
+  loadSavedList();
   fillPresets();
   fillTrips();
   (settings.battery_types || []).forEach(t => $("b-types").append(new Option(t)));

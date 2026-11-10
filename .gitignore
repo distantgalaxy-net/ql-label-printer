@@ -8,6 +8,11 @@ data/settings.json.tmp
 data/auth.json
 data/auth.json.tmp
 data/secret.key
+# Saved addresses (encrypted) and their key: never commit
+data/addresses.enc
+data/addresses.enc.tmp
+data/addresses.key
+data/addresses.key.tmp
 # Custom icons are personal; keep the folder only
 data/icons/*
 !data/icons/.keep

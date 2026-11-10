@@ -1,6 +1,6 @@
 # ------------------------------------------------------------------
 # labelprinter - label print service (web page + API)
-# Date: 2026-11-09 19:40 GMT (updated; first written 2026-11-07 18:10 GMT)
+# Date: 2026-11-10 10:00 GMT (updated; first written 2026-11-07 18:10 GMT)
 # Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
 #
 # Serves the phone-friendly web page and a small JSON API:
@@ -13,6 +13,10 @@
 #   POST /api/icons             upload a custom icon (form: name, file)
 #   DELETE /api/icons/<name>    delete a custom icon
 #   POST /api/travel/parse      pick a flight out of pasted text -> leg
+#   GET  /api/addresses         saved address labels: [{id, name}]
+#   GET  /api/addresses/<id>    one saved address label
+#   PUT  /api/addresses         save (or update, by name) an address label
+#   DELETE /api/addresses/<id>  delete a saved address label
 #   POST /api/preview/<kind>    PNG preview of a label
 #   POST /api/print/<kind>      print it  -> {"ok": bool, "message": str}
 #   POST /api/printer/test      check the printer can be reached (no print)
@@ -46,6 +50,7 @@ from waitress import serve
 
 import labels
 import printer
+from addressbook import AddressBook, AddressBookError
 import status as printer_status
 from auth import Auth, session_lifetime
 
@@ -363,6 +368,67 @@ def delete_icon(name):
 def too_large(_err):
     """Reply in JSON when an upload is bigger than MAX_CONTENT_LENGTH."""
     return jsonify({"ok": False, "message": "That file is too big (10 MB at most)."}), 413
+
+
+# ---------------------------------------------------------------- saved addresses
+# Encrypted on disk (see addressbook.py); behind the optional password like
+# every other /api/ call. Kept out of /api/settings on purpose.
+address_book = AddressBook(DATA_DIR)
+
+
+def _book_error(exc):
+    """Reply when the saved addresses can't be read."""
+    return jsonify({"ok": False, "message": str(exc)}), 500
+
+
+@app.get("/api/addresses")
+def list_addresses():
+    """Names of the saved address labels (no addresses), for the page's list."""
+    try:
+        return jsonify({"ok": True, "addresses": address_book.names()})
+    except AddressBookError as exc:
+        return _book_error(exc)
+
+
+@app.get("/api/addresses/<entry_id>")
+def get_address(entry_id):
+    """One saved address label: name, address, icon, note, note_align."""
+    try:
+        entry = address_book.get(entry_id)
+    except AddressBookError as exc:
+        return _book_error(exc)
+    if not entry:
+        return jsonify({"ok": False, "message": "That saved address isn't there any more."}), 404
+    return jsonify({"ok": True, "address": entry})
+
+
+@app.put("/api/addresses")
+def save_address():
+    """Save an address label under its name (updates one already saved with that name)."""
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({"ok": False, "message": "Expected a JSON object"}), 400
+    try:
+        entry, updated, err = address_book.save(body)
+    except AddressBookError as exc:
+        return _book_error(exc)
+    if err:
+        return jsonify({"ok": False, "message": err}), 400
+    return jsonify({"ok": True, "id": entry["id"], "updated": updated,
+                    "message": f"{'Updated' if updated else 'Saved'} “{entry['name']}”",
+                    "addresses": address_book.names()})
+
+
+@app.delete("/api/addresses/<entry_id>")
+def delete_address(entry_id):
+    """Delete a saved address label."""
+    try:
+        name = address_book.delete(entry_id)
+    except AddressBookError as exc:
+        return _book_error(exc)
+    if not name:
+        return jsonify({"ok": False, "message": "That saved address isn't there any more."}), 404
+    return jsonify({"ok": True, "message": f"Deleted “{name}”", "addresses": address_book.names()})
 
 
 @app.post("/api/travel/parse")

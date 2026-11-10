@@ -3,7 +3,7 @@
 Print useful labels on a Brother QL label printer from your phone or from
 Home Assistant.
 
-_Updated: 2026-11-10 09:30 GMT · Developer: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Updated: 2026-11-10 10:40 GMT · Developer: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 A small self-hosted web service, run in Docker (for example on a Synology
 NAS). It prints on a network-connected Brother QL printer from a
@@ -227,7 +227,24 @@ never a default.
 
 **Privacy:** contact cards and the phone's contact list are read in your
 browser. Only the name and address you choose are sent to the label
-printer app (to show the preview and print), and they aren't saved.
+printer app (to show the preview and print), and they're only kept if you
+save the address (below).
+
+## Saved addresses
+
+On the Address tab, **Save this address** keeps the whole label (name,
+address, note and icon) under the name, so you can reprint it later from
+**Load a saved address** without finding the contact again. Saving a name
+that's already saved updates it; **Delete saved address** removes it.
+
+Saved addresses are **encrypted** in `data/addresses.enc`, with the key in
+`data/addresses.key`. Both files are readable only by the app. They aren't
+included in the settings the page loads. A copy of `addresses.enc` on its
+own can't be read, so if you back up `data/` somewhere else, you can leave
+`addresses.key` out of that backup to keep the addresses private. If you
+do, you'll lose access to the saved addresses if the NAS's copy of the key
+is lost. Addresses are encrypted rather than hashed because a hash can't be
+turned back into an address to print.
 
 ## Optional password
 
@@ -396,4 +413,5 @@ warranty.
 It is built on [`brother_ql_next`](https://pypi.org/project/brother_ql_next/)
 (GPL-3.0), which turns labels into the printer's commands – which is why
 this project uses the GPL too. The other libraries it uses (Flask, Werkzeug,
-Pillow, waitress) have permissive licences compatible with the GPL.
+Pillow, waitress, cryptography) have permissive licences compatible with
+the GPL.

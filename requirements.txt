@@ -1,8 +1,9 @@
 # labelprinter Python packages (pinned so rebuilds behave the same)
-# Date: 2026-11-08 16:01 GMT (updated; first written 2026-11-07 18:10 GMT)
+# Date: 2026-11-10 10:00 GMT (updated; first written 2026-11-07 18:10 GMT)
 # Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
 brother_ql_next==0.12.0   # maintained fork of brother_ql; talks to the QL-810W
 Pillow==10.4.0            # draws the labels
 Flask==3.0.3              # web page + API
 waitress==3.0.0           # production web server
 Werkzeug==3.1.9           # Flask's toolkit; also hashes the optional password (scrypt)
+cryptography==50.0.2      # encrypts saved addresses (Apache-2.0 / BSD, GPL-compatible)
