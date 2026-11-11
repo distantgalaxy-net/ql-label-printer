@@ -230,7 +230,7 @@ automatically.
   release number (e.g. `1.2.0`) in the pull request, then publish a GitHub
   release tagged `v1.2.0`. The publish workflow refuses a tag that doesn't
   match `app/VERSION`. The next test build after `1.2.0` is `1.2.1`.
-- Released so far: v1.0.0, v1.1.0, v1.2.0.
+- Released so far: v1.0.0, v1.1.0, v1.2.0, v1.3.0.
 
 ## Coding conventions
 
@@ -402,3 +402,9 @@ image is valid for a model (it raises if the size is wrong).
 - 2026-11-08 – Distributed as a Docker Hub image built by GitHub Actions,
   so installs and updates are a download instead of copying code. `data/`
   is excluded from the build context (`.dockerignore`).
+- 2026-11-11 – v1.3.0: everything from 1.2.1–1.2.12 (saved address labels,
+  encrypted; address note; saved notes with alignment; saved food,
+  battery and trip labels in one layout; icon menu with page titles;
+  Luggage label (API kind `luggage`); cooking appliances; Clear label;
+  page links; tidier Settings and food/flight forms). The old API names
+  `travel` and `freezer` are gone.
