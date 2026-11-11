@@ -41,7 +41,7 @@ shows when you hover over an icon, and as the page title):
   date; use-by in days or months; cooking instructions for the oven,
   air fryer, microwave or hob (°C or °F, or watts); notes. Save food labels to reuse.
 - **Luggage label** (plane): your saved details plus flights, sorted and
-  split into journeys; saved trips. (Called `travel` in the API.)
+  split into journeys; saved trips.
 - **Battery label** (battery): the smallest label your printer allows.
   Save battery labels (device and battery type) to reuse.
 - **Network device label** (network): name, IP, VLAN, MAC.
@@ -405,19 +405,18 @@ data:
 | `GET /api/icons/<name>` | Small PNG of an icon |
 | `POST /api/icons` | Upload a custom icon (multipart form: `name`, `file`) |
 | `DELETE /api/icons/<name>` | Delete a custom icon |
-| `POST /api/travel/parse` | Pick one flight out of pasted text: `{"text": "…"}` → `{"leg": {…}, "missing": […], "more": true/false}` |
+| `POST /api/luggage/parse` | Pick one flight out of pasted text: `{"text": "…"}` → `{"leg": {…}, "missing": […], "more": true/false}` |
 | `POST /api/login`, `POST /api/logout`, `PUT /api/password` | Optional password: log in/out; set, change or remove (`{"current": "…", "new": "…"}`, empty `new` removes) |
 
 If a password is set, every call except `/api/login` and `/health` needs a
 login session or HTTP Basic auth, and answers `401` otherwise.
 
-`<type>` = `address`, `food`, `travel`, `battery`, `network` (`freezer`
-still works as the old name for `food`).
+`<type>` = `address`, `food`, `luggage`, `battery`, `network`.
 
 Fields:
 - **address:** `name`, `address` (lines separated by newlines), `icon`, `note` (optional, printed small under the address), `note_align` (`left` / `center`)
-- **food:** `title`, `storage` (`frozen` / `fridge` / `cupboard`), `date` (YYYY-MM-DD, default today), `shelf` (number), `shelf_unit` (`days` / `months`), `method` (`from_frozen` / `defrost` / `cook` / `none`), `appliance` (`oven` / `air_fryer` / `microwave` / `hob`; leave it out for the older oven-style line with no name in front), `minutes`, `temp` (oven, air fryer; in the Settings unit), `fan` (oven), `watts` (microwave), `notes`. The old freezer fields `frozen`, `months`, `temp_c`, `fan_c` still work.
-- **travel:** `name`, `address`, `phone`, and either `legs` (list of `{"date": "YYYY-MM-DD", "flight", "from", "to", "dep": "HHMM", "arr": "HHMM", "plus1": true/false}` – sorted and split into journeys for you) or `flights` (text as typed, blank line between journeys)
+- **food:** `title`, `storage` (`frozen` / `fridge` / `cupboard`), `date` (YYYY-MM-DD, default today), `shelf` (number), `shelf_unit` (`days` / `months`), `method` (`from_frozen` / `defrost` / `cook` / `none`), `appliance` (`oven` / `air_fryer` / `microwave` / `hob`; leave it out for the older oven-style line with no name in front), `minutes`, `temp` (oven, air fryer; in the Settings unit), `fan` (oven), `watts` (microwave), `notes`.
+- **luggage:** `name`, `address`, `phone`, and either `legs` (list of `{"date": "YYYY-MM-DD", "flight", "from", "to", "dep": "HHMM", "arr": "HHMM", "plus1": true/false}` – sorted and split into journeys for you) or `flights` (text as typed, blank line between journeys)
 - **battery:** `device`, `battery`, `changed` (YYYY-MM-DD, default today)
 - **network:** `name`, `ip`, `vlan`, `mac`, `notes`
 

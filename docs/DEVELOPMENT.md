@@ -28,8 +28,8 @@ AB1 2CD", `192.168.1.20`, `labels.home.example`).
   small text, left or centred; optional icon – 18 built-ins drawn in code, plus
   the user's own uploaded/deleted in the page, names must be new; long
   names move above the icon or wrap onto two lines), `food` (freezer/fridge/cupboard, use-by in days or months,
-  cooking instructions, notes, presets; `freezer` is an API alias),
-  `travel` (saved details shown locked with Edit/Clear; flights built one
+  cooking instructions, notes, presets),
+  `luggage` (saved details shown locked with Edit/Clear; flights built one
   by one or pasted, sorted, split into journeys; saved trips), `battery`
   (tiny), `network` (name/IP/VLAN/MAC).
 - **Settings tab** holds everything install-specific: printer model, IP
@@ -91,8 +91,7 @@ AB1 2CD", `192.168.1.20`, `labels.home.example`).
   raw reply for other models.
 - **Menu:** one icon button per page (Lucide icons, ISC licence, inline
   SVG), with the page name as the tooltip (`title`) and as the page title
-  (`#page-title`) under the menu. Settings sits at the right. The Travel
-  page is called "Luggage label" on screen; its API kind stays `travel`.
+  (`#page-title`) under the menu. Settings sits at the right.
 - **Buttons, one rule:** filled (`btn2 primary`) for anything that does
   something (save, print, check, upload, fill in); outline (`btn2`) only for
   Cancel and Edit, which just change what you see; red outline
@@ -334,6 +333,11 @@ image is valid for a model (it raises if the size is wrong).
   watts) and the label prints e.g. "Microwave: 5 min @ 900W". Steps
   and stirring go in the notes (saved notes make these one tap).
   Requests without `appliance` print as before.
+- 2026-11-11 – The travel label is now `luggage` everywhere: API kind,
+  `/api/luggage/parse`, the page and its browser storage. No alias for
+  `travel`, and the old `freezer` name and freezer-only fields (`frozen`,
+  `months`, `temp_c`, `fan_c`, `freezer_presets`) are gone too: nothing
+  was using them.
 - 2026-11-10 – Saved addresses (encrypted, by name) for quick reprints.
   New dependency `cryptography` (Apache-2.0/BSD, GPL-compatible). Address
   tab reordered: label fields first, then saved addresses, then folding

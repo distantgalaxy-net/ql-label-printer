@@ -1,6 +1,6 @@
 # ------------------------------------------------------------------
 # labelprinter - label print service (web page + API)
-# Date: 2026-11-10 22:00 GMT (updated; first written 2026-11-07 18:10 GMT)
+# Date: 2026-11-11 10:30 GMT (updated; first written 2026-11-07 18:10 GMT)
 # Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
 #
 # Serves the phone-friendly web page and a small JSON API:
@@ -12,7 +12,7 @@
 #   GET  /api/icons/<name>      a small PNG of one icon (for the page)
 #   POST /api/icons             upload a custom icon (form: name, file)
 #   DELETE /api/icons/<name>    delete a custom icon
-#   POST /api/travel/parse      pick a flight out of pasted text -> leg
+#   POST /api/luggage/parse     pick a flight out of pasted text -> leg
 #   GET  /api/addresses         saved address labels: [{id, name}]
 #   GET  /api/addresses/<id>    one saved address label
 #   PUT  /api/addresses         save (or update, by name) an address label
@@ -24,8 +24,7 @@
 #   GET  /api/options           printer models, time zones and the app version
 #   GET  /login, POST /api/login, POST /api/logout   optional password
 #   PUT  /api/password          set, change or remove the password
-# <kind> is address | food | travel | battery | network
-# ("freezer" still works as the old name for "food").
+# <kind> is address | food | luggage | battery | network
 # Home Assistant can call /api/print/<kind> with the same JSON.
 #
 # Optional password (off by default, see auth.py). Without one, keep the
@@ -91,7 +90,7 @@ DEFAULT_SETTINGS = {
     "accent": "green",
     # Saved foods: everything on the form except the date
     "food_presets": [],
-    # Saved trips for travel labels: [{"name": ..., "legs": [...]}]
+    # Saved trips for luggage labels: [{"name": ..., "legs": [...]}]
     "trips": [],
     # Reusable notes per page: delivery instructions, cooking notes.
     # Each is {"text": ..., "align": "left" | "center"} (food notes: left)
@@ -214,13 +213,6 @@ def load_settings():
     merged.update(saved)
     # Older files may lack newer printer fields (e.g. model): fill them in
     merged["printer"] = {**DEFAULT_SETTINGS["printer"], **(saved.get("printer") or {})}
-    # Older files kept freezer presets: carry them over as frozen foods
-    old = merged.pop("freezer_presets", None)
-    if old and not saved.get("food_presets"):
-        merged["food_presets"] = [{**p, "storage": "frozen", "shelf": p.get("months", ""),
-                                   "shelf_unit": "months", "temp": p.get("temp_c", ""),
-                                   "fan": p.get("fan_c", ""), "temp_unit": "C"}
-                                  for p in old if isinstance(p, dict)]
     merged["saved_notes"] = clean_notes(merged.get("saved_notes"))
     return merged
 
@@ -470,8 +462,8 @@ def delete_address(entry_id):
     return jsonify({"ok": True, "message": f"Deleted the saved address label for “{name}”", "addresses": address_book.names()})
 
 
-@app.post("/api/travel/parse")
-def travel_parse():
+@app.post("/api/luggage/parse")
+def luggage_parse():
     """Pick one flight out of pasted text (e.g. a booking confirmation).
 
     Body {"text": ...} -> {"ok", "leg", "missing", "more"}; the page fills

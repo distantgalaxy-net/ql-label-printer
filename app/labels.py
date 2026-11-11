@@ -1,15 +1,14 @@
 # ------------------------------------------------------------------
 # labelprinter - label layouts
-# Date: 2026-11-11 09:00 GMT (updated; first written 2026-11-07 18:10 GMT)
+# Date: 2026-11-11 10:30 GMT (updated; first written 2026-11-07 18:10 GMT)
 # Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
 #
 # Turns form data into a black-and-white image the exact width of the
 # 62mm continuous roll (696 dots at 300 dpi). The label's LENGTH grows
 # with its content, so nothing is ever printed landscape.
 #
-# Label types: address, food (freezer / fridge / cupboard), travel,
-# battery, network. "freezer" is kept as another name for "food" so older
-# Home Assistant calls still work.
+# Label types: address, food (freezer / fridge / cupboard), luggage,
+# battery, network.
 #
 # "Today" (default dates on labels) uses the time zone chosen in the
 # Settings tab, so daylight saving is handled by the tz database. The
@@ -17,7 +16,7 @@
 #
 # Also here: custom icon upload/delete (pictures are converted to
 # black-and-white squares and saved in /data/icons, never in the image),
-# and the flight helpers for travel labels (format, sort, split into
+# and the flight helpers for luggage labels (format, sort, split into
 # journeys, and pick a flight out of pasted booking text).
 # ------------------------------------------------------------------
 import contextvars
@@ -862,18 +861,15 @@ def food(data):
     Temperatures are in the unit chosen in Settings (°C or °F).
     Without an appliance (older saves, older API calls) the line prints as
     before, with no "Oven:" in front, and uses temp and fan.
-    Older freezer fields still work: frozen, months, temp_c, fan_c.
     """
     title = (data.get("title") or "").strip()
     storage = data.get("storage") if data.get("storage") in STORAGE else "frozen"
     kind = STORAGE[storage]
-    raw_date = data.get("date") or data.get("frozen")
+    raw_date = data.get("date")
     start = datetime.strptime(raw_date[:10], "%Y-%m-%d").date() if raw_date else today()
 
-    # "Use within": new fields first, then the old freezer "months"
+    # "Use within": a number of days or months (default unit by storage)
     amount, unit = _number(data.get("shelf")), data.get("shelf_unit")
-    if amount is None and _number(data.get("months")) is not None:
-        amount, unit = _number(data.get("months")), "months"
     unit = unit if unit in ("days", "months") else kind["unit"]
 
     usable = WIDTH - 2 * SIDE
@@ -889,10 +885,8 @@ def food(data):
     if method != "none":
         heading = METHODS.get(method, "")
         appliance = data.get("appliance") if data.get("appliance") in APPLIANCES else ""
-        # Old freezer fields were always °C; new ones use the Settings unit
+        # Temperatures are in the unit chosen in Settings
         temp, fan, sym = data.get("temp"), data.get("fan"), _unit.get()
-        if temp in (None, "") and fan in (None, "") and (data.get("temp_c") or data.get("fan_c")):
-            temp, fan, sym = data.get("temp_c"), data.get("fan_c"), "C"
         # Only the settings that make sense for the appliance are printed
         # (the page may still hold, say, an oven temperature in a hidden box)
         if appliance not in ("", "oven", "air_fryer"):
@@ -1118,9 +1112,9 @@ def _safe_date(year, month, day):
         return None
 
 
-def travel(data):
+def luggage(data):
     """
-    Travel label: name, address, phone, then the flights. Monospaced so
+    Luggage label: name, address, phone, then the flights. Monospaced so
     times line up.
     data: name, address, phone, and either
           legs    - a list of flights (see above): sorted, formatted with
@@ -1195,8 +1189,7 @@ def network(data):
     return draw_lines(lines)
 
 
-# "freezer" is the old name of the food label, kept for existing API callers
-RENDERERS = {"address": address, "food": food, "freezer": food, "travel": travel,
+RENDERERS = {"address": address, "food": food, "luggage": luggage,
              "battery": battery, "network": network}
 
 
