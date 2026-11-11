@@ -338,6 +338,10 @@ image is valid for a model (it raises if the size is wrong).
   `travel`, and the old `freezer` name and freezer-only fields (`frozen`,
   `months`, `temp_c`, `fan_c`, `freezer_presets`) are gone too: nothing
   was using them.
+- 2026-11-11 – Luggage: "Lands the next day (+1)" sits under Arrives, so it
+  reads as part of the landing time and the From/To and Departs/Arrives
+  boxes stay lined up. Boxes in a row can now shrink to their column
+  (date boxes no longer run into the box beside them on a phone).
 - 2026-11-10 – Saved addresses (encrypted, by name) for quick reprints.
   New dependency `cryptography` (Apache-2.0/BSD, GPL-compatible). Address
   tab reordered: label fields first, then saved addresses, then folding

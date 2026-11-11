@@ -1,7 +1,7 @@
 <!doctype html>
 <!--
   labelprinter - label printing page (phone-first)
-  Date: 2026-11-11 10:30 GMT (updated; first written 2026-11-07 18:15 GMT)
+  Date: 2026-11-11 11:15 GMT (updated; first written 2026-11-07 18:15 GMT)
   Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
   One form per label type; the preview updates as you type, then Print.
   The Settings tab holds the printer (model, IP address, port), the time
@@ -77,6 +77,9 @@
   textarea { min-height: 96px; resize: vertical; }
   textarea.mono { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: .9rem; }
   .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+  /* Let boxes in a row shrink to their column (date boxes are wider by default
+     and would otherwise run into the box beside them on a phone) */
+  .row > *, .row input:not([type="checkbox"]):not([type="radio"]) { min-width: 0; }
   .seg { display: flex; gap: 6px; flex-wrap: wrap; }
   .seg label { display: flex; align-items: center; gap: 6px; color: var(--fg); border: 1px solid var(--line);
     border-radius: 8px; padding: 8px 10px; background: var(--field); cursor: pointer; }
@@ -401,11 +404,15 @@
             <label>From (airport)<input id="l-from" list="airports" autocomplete="off" maxlength="4" placeholder="AAA" spellcheck="false"></label>
             <label>To (airport)<input id="l-to" list="airports" autocomplete="off" maxlength="4" placeholder="BBB" spellcheck="false"></label>
           </div>
+          <!-- "+1" sits under Arrives (it's about the landing time), so the
+               From/To and Departs/Arrives boxes stay lined up -->
           <div class="row">
-            <label>Departs<input id="l-dep" type="time"></label>
-            <label>Arrives<input id="l-arr" type="time"></label>
+            <label style="align-self:start">Departs<input id="l-dep" type="time"></label>
+            <div style="display:grid;gap:8px;align-content:start">
+              <label>Arrives<input id="l-arr" type="time"></label>
+              <label class="check"><input id="l-plus1" type="checkbox"> Lands the next day (+1)</label>
+            </div>
           </div>
-          <label class="check"><input id="l-plus1" type="checkbox"> Lands the next day (+1)</label>
           <div class="actions">
             <button type="button" class="btn2 primary" id="l-add">Add flight</button>
             <button type="button" class="btn2" id="l-cancel" hidden>Cancel</button>
