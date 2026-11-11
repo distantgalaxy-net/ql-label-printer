@@ -342,6 +342,16 @@ image is valid for a model (it raises if the size is wrong).
   reads as part of the landing time and the From/To and Departs/Arrives
   boxes stay lined up. Boxes in a row can now shrink to their column
   (date boxes no longer run into the box beside them on a phone).
+- 2026-11-11 – **Clear label** on the Address, Food, Battery and Network
+  pages (`clearForm`: `form.reset()` back to the page's starting values,
+  then dates set to today and the page's buttons refreshed). No "are you
+  sure?": it only empties boxes, nothing saved is touched.
+- 2026-11-11 – Page links: `/#address`, `/#food`, `/#luggage`,
+  `/#battery`, `/#network`, `/#settings` open that page (e.g. from a Home
+  Assistant dashboard). The `#page` is removed from the address bar with
+  `history.replaceState` once shown, so the URL doesn't change while
+  moving around. `hashchange` is followed too, and the login page and the
+  401 redirect carry the `#page` through sign-in.
 - 2026-11-10 – Saved addresses (encrypted, by name) for quick reprints.
   New dependency `cryptography` (Apache-2.0/BSD, GPL-compatible). Address
   tab reordered: label fields first, then saved addresses, then folding

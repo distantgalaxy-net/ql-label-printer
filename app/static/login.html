@@ -1,7 +1,7 @@
 <!doctype html>
 <!--
   labelprinter - login page (only used when a password has been set)
-  Date: 2026-11-08 23:20 GMT (updated; first written 2026-11-08 16:01 GMT)
+  Date: 2026-11-11 12:00 GMT (updated; first written 2026-11-08 16:01 GMT)
   Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
   Uses the accent colour chosen in Settings: the main page remembers it in
   this browser (localStorage), since settings can't be read before login.
@@ -64,7 +64,8 @@ document.getElementById("login").addEventListener("submit", async (e) => {
     const r = await fetch("/api/login", { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ password: document.getElementById("password").value }) });
     const j = await r.json().catch(() => ({ ok: false, message: "No reply from the label service" }));
-    if (j.ok) { location.href = "/"; return; }
+    // Back to the page the link asked for (e.g. /#luggage), if any
+    if (j.ok) { location.href = "/" + location.hash; return; }
     status.textContent = j.message || "Couldn't log in";
   } catch (err) { status.textContent = "Can't reach the label service"; }
   btn.disabled = false;

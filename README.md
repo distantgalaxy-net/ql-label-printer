@@ -190,6 +190,29 @@ Then, if you like:
 The **Print** button sits directly under the label preview. Messages
 appear right next to the button you pressed.
 
+Each label page has a **Clear label** button under its boxes. It empties
+them and puts the choices back to how they start (dates go back to
+today). Your saved labels, saved notes and icons aren't touched. On the
+Luggage page, **Clear flights** does the same for the flights.
+
+### Opening a page from a link
+
+Add the page name after a `#` to open it straight away:
+
+| Page | Link |
+|---|---|
+| Address label | `http://<your address>:8013/#address` |
+| Food label | `…/#food` |
+| Luggage label | `…/#luggage` |
+| Battery label | `…/#battery` |
+| Network device label | `…/#network` |
+| Settings | `…/#settings` |
+
+The `#…` disappears from the address bar once the page opens, so the
+address stays the same as you move around. If a password is set, you
+sign in first and then land on the page the link asked for. Until the
+printer has been set up, every link opens Settings.
+
 The page checks the printer when it opens, after printing, when you come
 back to it, and every minute while it's open (every 30 seconds while
 there's a problem). The printer is also checked just before every print
@@ -378,6 +401,18 @@ rest_command:
     # Only if you set a password:
     # username: homeassistant
     # password: !secret labelprinter_password
+```
+
+To open a page from a dashboard, use a button card with a link (use the
+address your phone or browser reaches the app on, not 127.0.0.1):
+
+```yaml
+type: button
+name: Luggage label
+icon: mdi:bag-suitcase
+tap_action:
+  action: url
+  url_path: https://labels.example.lan/#luggage
 ```
 
 Example action – a battery label:

@@ -1,7 +1,7 @@
 <!doctype html>
 <!--
   labelprinter - label printing page (phone-first)
-  Date: 2026-11-11 11:15 GMT (updated; first written 2026-11-07 18:15 GMT)
+  Date: 2026-11-11 12:00 GMT (updated; first written 2026-11-07 18:15 GMT)
   Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
   One form per label type; the preview updates as you type, then Print.
   The Settings tab holds the printer (model, IP address, port), the time
@@ -17,6 +17,10 @@
   disabled with a message such as "Printer cover open" until it's ready.
   An optional password (Settings tab) protects the page; if one is set and
   the login has expired, any API call answers 401 and we go to /login.
+  A link can open a page directly: /#address, /#food, /#luggage, /#battery,
+  /#network or /#settings (e.g. from a Home Assistant dashboard button). The
+  "#page" is removed from the address bar once the page is shown, so the
+  address stays the same as you move around.
   Everything saved (presets, details, trips, icons) lives on the server in
   /data - never in this repo or the Docker image.
   Address tab: two ways to fill in an address from contacts.
@@ -210,6 +214,9 @@
         <label>Icon<select id="a-icon" name="icon"><option value="none">None</option></select></label>
         <img class="thumb" id="a-icon-thumb" alt="Selected icon" hidden>
       </div>
+      <!-- Clear label: empties this page's boxes (saved labels and notes stay) -->
+      <div class="actions"><button type="button" class="btn2 danger clear-form">Clear label</button></div>
+      <p class="msg" id="msg-clear-address" role="status"></p>
 
       <!-- 2. Fill in from contacts (folds away). The picker button only
            shows where it can share addresses (Chrome on Android over
@@ -333,6 +340,9 @@
         <button type="button" class="btn2 danger mini note-del" hidden>Delete note</button>
       </div>
       <p class="msg" id="msg-note-food" role="status"></p>
+      <!-- Clear label: empties this page's boxes (saved labels and notes stay) -->
+      <div class="actions"><button type="button" class="btn2 danger clear-form">Clear label</button></div>
+      <p class="msg" id="msg-clear-food" role="status"></p>
       <!-- Saved food labels: same layout as saved address labels -->
       <div class="group">
         <h3>Saved food labels</h3>
@@ -455,6 +465,9 @@
       </div>
       <datalist id="b-types"></datalist>
       <p class="small">Prints the smallest label your printer allows (about 13mm on most models).</p>
+      <!-- Clear label: empties this page's boxes (saved labels and notes stay) -->
+      <div class="actions"><button type="button" class="btn2 danger clear-form">Clear label</button></div>
+      <p class="msg" id="msg-clear-battery" role="status"></p>
       <!-- Saved battery labels: same layout as saved address and food labels -->
       <div class="group">
         <h3>Saved battery labels</h3>
@@ -485,6 +498,9 @@
       </div>
       <label>MAC (optional)<input id="n-mac" name="mac" autocomplete="off"></label>
       <label>Notes (optional)<textarea id="n-notes" name="notes" style="min-height:60px"></textarea></label>
+      <!-- Clear label: empties this page's boxes (saved labels and notes stay) -->
+      <div class="actions"><button type="button" class="btn2 danger clear-form">Clear label</button></div>
+      <p class="msg" id="msg-clear-network" role="status"></p>
     </form>
 
     <!-- Settings: not a label, so the preview and Print button are hidden on this tab -->
@@ -562,7 +578,7 @@
 const _fetch = window.fetch.bind(window);
 window.fetch = async (...args) => {
   const r = await _fetch(...args);
-  if (r.status === 401) location.href = "/login";
+  if (r.status === 401) location.href = "/login" + location.hash;
   return r;
 };
 
@@ -662,10 +678,17 @@ function showTab(k) {
   document.querySelectorAll("form[data-kind]").forEach(f => f.hidden = f.dataset.kind !== k);
   $("preview-box").hidden = isSettings;
   try { localStorage.setItem("labelprinter-tab", k); } catch (e) {}
+  // Opened from a link such as /#luggage: tidy the address bar again
+  if (location.hash) history.replaceState(null, "", location.pathname + location.search);
   clearMessages();
   if (!isSettings) schedulePreview(0);
 }
 document.querySelectorAll("#tabs button").forEach(b => b.addEventListener("click", () => showTab(b.dataset.kind)));
+// A #page link followed while the app is already open in this tab
+window.addEventListener("hashchange", () => {
+  const k = decodeURIComponent(location.hash.slice(1)).toLowerCase();
+  if (k && document.querySelector(`form[data-kind="${k}"]`)) showTab(k);
+});
 
 // ---- preview -----------------------------------------------------
 function schedulePreview(delay = 350) {
@@ -1704,6 +1727,23 @@ async function deleteBattery(i) {
 }
 $("b-delete").addEventListener("click", () => { const i = findBattery($("b-device").value); if (i >= 0) deleteBattery(i); });
 
+// ---- Clear label (address, food, battery and network pages) ------------
+// Puts the page's boxes back to how they start: empty, dates today, choices
+// at their defaults. Saved labels, saved notes and your own icons stay.
+function clearForm(k) {
+  document.querySelector(`form[data-kind="${k}"]`).reset();
+  if (k === "address") { showIconThumb(); savedButtons(); }
+  if (k === "food") { $("f-date").value = today(); showStorage(false); presetButtons(); }
+  if (k === "battery") { $("b-changed").value = today(); batteryButtons(); }
+  refreshNoteRows();
+  schedulePreview(0);
+}
+document.querySelectorAll(".clear-form").forEach(btn => btn.addEventListener("click", () => {
+  const k = btn.closest("form").dataset.kind;
+  clearForm(k);
+  say(`msg-clear-${k}`, "Cleared", "ok");
+}));
+
 // ---- Settings tab: printer and time zone ---------------------------
 // Read the printer fields as the object the API expects
 function printerFields() {
@@ -1864,6 +1904,9 @@ async function init() {
   fillTrips($("t-trip-name").value);
   let start = "address";
   try { start = localStorage.getItem("labelprinter-tab") || start; } catch (e) {}
+  // A link straight to a page (/#luggage) wins over the last page used
+  const linked = decodeURIComponent(location.hash.slice(1)).toLowerCase();
+  if (linked && document.querySelector(`form[data-kind="${linked}"]`)) start = linked;
   // Until setup is done, only the Settings tab is available
   setLocked(!isSetUp());
   if (locked) start = "settings";
