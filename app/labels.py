@@ -1,15 +1,14 @@
 # ------------------------------------------------------------------
 # labelprinter - label layouts
-# Date: 2026-11-09 19:40 GMT (updated; first written 2026-11-07 18:10 GMT)
+# Date: 2026-11-11 10:30 GMT (updated; first written 2026-11-07 18:10 GMT)
 # Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
 #
 # Turns form data into a black-and-white image the exact width of the
 # 62mm continuous roll (696 dots at 300 dpi). The label's LENGTH grows
 # with its content, so nothing is ever printed landscape.
 #
-# Label types: address, food (freezer / fridge / cupboard), travel,
-# battery, network. "freezer" is kept as another name for "food" so older
-# Home Assistant calls still work.
+# Label types: address, food (freezer / fridge / cupboard), luggage,
+# battery, network.
 #
 # "Today" (default dates on labels) uses the time zone chosen in the
 # Settings tab, so daylight saving is handled by the tz database. The
@@ -17,7 +16,7 @@
 #
 # Also here: custom icon upload/delete (pictures are converted to
 # black-and-white squares and saved in /data/icons, never in the image),
-# and the flight helpers for travel labels (format, sort, split into
+# and the flight helpers for luggage labels (format, sort, split into
 # journeys, and pick a flight out of pasted booking text).
 # ------------------------------------------------------------------
 import contextvars
@@ -718,10 +717,56 @@ def name_lines(name, width):
     return [{"text": t, "role": "cond", "size": best_size, "spacing": 1.05} for t in best]
 
 
+NOTE_SIZE = 28          # the optional note's font size (address text is 42-48)
+
+
+def wrap_text(text, role, size, width):
+    """Split text into lines no wider than width dots, breaking between words.
+
+    New lines typed by the user are kept. A single word too long for a line
+    is put on its own line (fit_size isn't used, so the note stays small).
+    """
+    out = []
+    for para in (text or "").splitlines():
+        line = ""
+        for word in para.split():
+            trial = f"{line} {word}".strip()
+            if line and text_width(trial, role, size) > width:
+                out.append(line)
+                line = word
+            else:
+                line = trial
+        if line:
+            out.append(line)
+    return out
+
+
 def address(data):
     """
-    Address label: large condensed name, address lines underneath,
-    optional icon on the left (gift, birthday cake, Christmas tree...).
+    Address label: the name and address (see _address_block), then an
+    optional note underneath across the full width, in much smaller text,
+    left-aligned or centred.
+    data: name, address, icon, note (multi-line), note_align (left | center)
+    """
+    block = _address_block(data)
+    note_lines = wrap_text(data.get("note") or "", "sans", NOTE_SIZE, WIDTH - 2 * SIDE)
+    if not note_lines:
+        return block
+    align = "center" if data.get("note_align") == "center" else "left"
+    note = draw_lines([{"text": t, "role": "sans", "size": NOTE_SIZE, "align": align, "spacing": 1.15}
+                       for t in note_lines], height_pad=TOP)
+    # The block already ends with TOP of space; trim most of it so the note sits close
+    gap = TOP // 3
+    img = Image.new("L", (WIDTH, block.height - TOP + gap + note.height - TOP), 255)
+    img.paste(block.crop((0, 0, WIDTH, block.height - TOP + gap)), (0, 0))
+    img.paste(note.crop((0, TOP, WIDTH, note.height)), (0, block.height - TOP + gap))
+    return img
+
+
+def _address_block(data):
+    """
+    Address label without its note: large condensed name, address lines
+    underneath, optional icon on the left (gift, birthday cake, Christmas tree...).
     data: name, address (multi-line), icon
 
     Two layouts when there's an icon:
@@ -792,6 +837,8 @@ STORAGE = {
 # Cooking method -> heading line on the label ("cook" = no heading, just
 # the time and temperature; "none" = no cooking instructions at all)
 METHODS = {"from_frozen": "Cook from frozen", "defrost": "Defrost first", "cook": "", "": ""}
+# What the food is cooked in, as printed before the time
+APPLIANCES = {"oven": "Oven", "air_fryer": "Air fryer", "microwave": "Microwave", "hob": "Hob"}
 
 
 def _number(value):
@@ -808,20 +855,21 @@ def food(data):
     from "use within" days or months, optional cooking instructions and notes.
     data: title, storage (frozen | fridge | cupboard), date (YYYY-MM-DD,
           default today), shelf (number), shelf_unit (days | months),
-          method (from_frozen | defrost | cook | none), minutes, temp, fan, notes.
+          method (from_frozen | defrost | cook | none),
+          appliance (oven | air_fryer | microwave | hob), minutes,
+          temp (oven, air fryer), fan (oven), watts (microwave), notes.
     Temperatures are in the unit chosen in Settings (°C or °F).
-    Older freezer fields still work: frozen, months, temp_c, fan_c.
+    Without an appliance (older saves, older API calls) the line prints as
+    before, with no "Oven:" in front, and uses temp and fan.
     """
     title = (data.get("title") or "").strip()
     storage = data.get("storage") if data.get("storage") in STORAGE else "frozen"
     kind = STORAGE[storage]
-    raw_date = data.get("date") or data.get("frozen")
+    raw_date = data.get("date")
     start = datetime.strptime(raw_date[:10], "%Y-%m-%d").date() if raw_date else today()
 
-    # "Use within": new fields first, then the old freezer "months"
+    # "Use within": a number of days or months (default unit by storage)
     amount, unit = _number(data.get("shelf")), data.get("shelf_unit")
-    if amount is None and _number(data.get("months")) is not None:
-        amount, unit = _number(data.get("months")), "months"
     unit = unit if unit in ("days", "months") else kind["unit"]
 
     usable = WIDTH - 2 * SIDE
@@ -836,10 +884,16 @@ def food(data):
     method = data.get("method") or ""
     if method != "none":
         heading = METHODS.get(method, "")
-        # Old freezer fields were always °C; new ones use the Settings unit
+        appliance = data.get("appliance") if data.get("appliance") in APPLIANCES else ""
+        # Temperatures are in the unit chosen in Settings
         temp, fan, sym = data.get("temp"), data.get("fan"), _unit.get()
-        if temp in (None, "") and fan in (None, "") and (data.get("temp_c") or data.get("fan_c")):
-            temp, fan, sym = data.get("temp_c"), data.get("fan_c"), "C"
+        # Only the settings that make sense for the appliance are printed
+        # (the page may still hold, say, an oven temperature in a hidden box)
+        if appliance not in ("", "oven", "air_fryer"):
+            temp = ""
+        if appliance not in ("", "oven"):
+            fan = ""
+        watts = str(data.get("watts") or "").strip() if appliance == "microwave" else ""
         parts = []
         if str(data.get("minutes") or "").strip():
             parts.append(f"{str(data['minutes']).strip()} min")
@@ -848,9 +902,15 @@ def food(data):
             temps.append(f"{str(temp).strip()}°{sym}")
         if str(fan or "").strip():
             temps.append(f"{str(fan).strip()}°{sym} fan")
+        if watts:
+            temps.append(f"{watts}W")
         if temps:
             parts.append("@ " + " / ".join(temps))
-        cook_lines = [t for t in (heading, "  ".join(parts)) if t]
+        how = "  ".join(parts)
+        # "Oven: 45 min @ 180°C / 160°C fan", or just "Microwave" with no details
+        if appliance:
+            how = f"{APPLIANCES[appliance]}: {how}" if how else APPLIANCES[appliance]
+        cook_lines = [t for t in (heading, how) if t]
         if cook_lines:
             size = fit_size(cook_lines, "sans", 40, usable)
             for i, t in enumerate(cook_lines):
@@ -1052,9 +1112,9 @@ def _safe_date(year, month, day):
         return None
 
 
-def travel(data):
+def luggage(data):
     """
-    Travel label: name, address, phone, then the flights. Monospaced so
+    Luggage label: name, address, phone, then the flights. Monospaced so
     times line up.
     data: name, address, phone, and either
           legs    - a list of flights (see above): sorted, formatted with
@@ -1129,8 +1189,7 @@ def network(data):
     return draw_lines(lines)
 
 
-# "freezer" is the old name of the food label, kept for existing API callers
-RENDERERS = {"address": address, "food": food, "freezer": food, "travel": travel,
+RENDERERS = {"address": address, "food": food, "luggage": luggage,
              "battery": battery, "network": network}
 
 

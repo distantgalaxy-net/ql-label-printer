@@ -3,7 +3,7 @@
 Print useful labels on a Brother QL label printer from your phone or from
 Home Assistant.
 
-_Updated: 2026-11-09 20:30 GMT · Developer: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Updated: 2026-11-10 12:10 GMT · Developer: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 A small self-hosted web service, run in Docker (for example on a Synology
 NAS). It prints on a network-connected Brother QL printer from a
@@ -30,13 +30,27 @@ Home Assistant on the same host (optional)
 
 ## Label types
 
-Address (optional icon, including your own uploaded pictures; fill in
-from a contact card, or on Android straight from your contacts) · Food
-(freezer, fridge or cupboard: frozen/opened date, use-by in days or months,
-cooking instructions in °C or °F, notes, saved presets) · Travel (your
-saved details + flights, sorted and split into journeys, saved trips) ·
-Battery (the smallest label your printer allows) · Network device (name,
-IP, VLAN, MAC).
+Each has its own page, chosen from the icon menu at the top (the name
+shows when you hover over an icon, and as the page title):
+
+- **Address label** (envelope): name, address, an optional small note and
+  an optional icon (built in or your own pictures). Fill it in from a
+  contact card, or on Android straight from your contacts. Save whole
+  labels to reprint later.
+- **Food label** (cutlery): freezer, fridge or cupboard; frozen/opened
+  date; use-by in days or months; cooking instructions for the oven,
+  air fryer, microwave or hob (°C or °F, or watts); notes. Save food labels to reuse.
+- **Luggage label** (plane): your saved details plus flights, sorted and
+  split into journeys; saved trips.
+- **Battery label** (battery): the smallest label your printer allows.
+  Save battery labels (device and battery type) to reuse.
+- **Network device label** (network): name, IP, VLAN, MAC.
+
+Notes you use often (delivery instructions, cooking notes) can be saved
+on their own, separately from any label: type the note and tap **Save
+note** under the note box, then pick it from **Use a saved note…** on any
+other label. An address note keeps its alignment (left or centre); if you
+change the alignment of a saved note, the button becomes **Update note**.
 
 ## Supported printers and labels
 
@@ -115,16 +129,18 @@ forward it from the internet.
 
 ## First-time setup in the page
 
-A new install opens on the **Settings** tab with the label tabs locked:
+A new install opens on the **Settings** tab with the label pages locked:
 
 - **Printer:** pick your **model**, enter its **IP address** and **port**
   (Brother printers use **9100**).
+- Tap **Test and save** (at the end of the Printer section). It connects to
+  the printer first and only saves if that works; then the label pages
+  unlock. (Until then the print API replies "Setup isn't finished".)
+- **Printer status:** **Check printer** shows whether it's ready and what it
+  reported.
 - **Time zone:** it suggests your device's (or tap **Use this device's time
-  zone**). It sets "today" on food and battery labels; daylight saving
-  changes are handled automatically.
-- Tap **Test and save**. It connects to the printer first and only saves if
-  that works; then the label tabs unlock. (Until then the print API replies
-  "Setup isn't finished".)
+  zone**), and saves as soon as you change it. It sets "today" on food and
+  battery labels; daylight saving changes are handled automatically.
 - **Temperature unit:** °C or °F for cooking temperatures on food labels
   (saved as soon as you choose).
 - **Colour:** the page's accent colour – green, blue, red, pink, purple,
@@ -145,29 +161,57 @@ otherwise.
 
 Then, if you like:
 
-- **Travel tab:** type your name, address and phone once and tap
+- **Luggage label:** type your name, address and phone once and tap
   **Save my details**. They're then shown locked, with **Edit** and
   **Clear**, and filled in every time.
-- **Travel flights:** add flights one at a time (date picker, airports you've
+- **Luggage label flights:** add flights one at a time (date picker, airports you've
   already used are suggested, the next flight starts on the day the last
   one landed, **+1** is ticked for you when it lands at an earlier clock
   time). Or open **Fill in from your booking**, paste one flight copied
   from your confirmation email or itinerary (any layout), and the boxes
   are filled in for you to check before tapping **Add flight**. They're sorted by date, and a gap of more
-  than a day starts a new journey on the label. **Save trip** keeps the
-  whole set to load again later; the flights on the page are also
+  than a day starts a new journey on the label. **Saved trips** (below the
+  flights) keeps the whole set under a trip name to load again later, with
+  a **Manage saved trips** list; the flights on the page are also
   remembered in your browser.
-- **Food tab:** fill in a food you make often and tap **Save as preset**.
-  A preset keeps everything except the date: choosing it again fills in
-  today's date and works out the use-by date afresh.
-- **Address tab → Import contact card** (any device) or **Choose from
+- **Food label:** fill in a food you make often and tap **Save food
+  label**. It keeps everything except the date: loading it again fills in
+  today's date and works out the use-by date afresh. **Manage saved food
+  labels** lists them all, each with a **Delete** button.
+- **Battery label:** **Save battery label** keeps the device and battery
+  type under the device name. Loading it again fills in today's date.
+  **Manage saved battery labels** lists them, each with a **Delete** button.
+- **Address label → Import contact card** (any device) or **Choose from
   contacts** (Android): fill in an address from your contacts. See
   [Filling in addresses from contacts](#filling-in-addresses-from-contacts).
-- **Address tab → Your own icons:** upload a picture; it's converted to a
+- **Address label → Your own icons:** upload a picture; it's converted to a
   black-and-white square. Delete it there too.
 
 The **Print** button sits directly under the label preview. Messages
 appear right next to the button you pressed.
+
+Each label page has a **Clear label** button under its boxes. It empties
+them and puts the choices back to how they start (dates go back to
+today). Your saved labels, saved notes and icons aren't touched. On the
+Luggage page, **Clear flights** does the same for the flights.
+
+### Opening a page from a link
+
+Add the page name after a `#` to open it straight away:
+
+| Page | Link |
+|---|---|
+| Address label | `http://<your address>:8013/#address` |
+| Food label | `…/#food` |
+| Luggage label | `…/#luggage` |
+| Battery label | `…/#battery` |
+| Network device label | `…/#network` |
+| Settings | `…/#settings` |
+
+The `#…` disappears from the address bar once the page opens, so the
+address stays the same as you move around. If a password is set, you
+sign in first and then land on the page the link asked for. Until the
+printer has been set up, every link opens Settings.
 
 The page checks the printer when it opens, after printing, when you come
 back to it, and every minute while it's open (every 30 seconds while
@@ -209,7 +253,9 @@ the form, and nothing is saved or uploaded.
 - **iPhone:** Contacts → open the contact → **Share Contact** → **Save to
   Files**, then tap **Import contact card**.
 
-On a computer you can also drop the file onto the Address tab. A file can
+On a computer you can also drop the file onto the Address tab. A
+contact's title (e.g. *Dr*) and suffix (e.g. *OBE*) are added to the name,
+which you can edit before printing. A file can
 hold many contacts (e.g. a whole Google export): you'll get a list of
 names to choose from, with a search box for long lists. The file is read
 in your browser and never sent to the server.
@@ -222,6 +268,30 @@ shares names, emails and phone numbers – import a contact card instead.)
 
 If a contact has more than one address you're asked which one; there's
 never a default.
+
+**Privacy:** contact cards and the phone's contact list are read in your
+browser. Only the name and address you choose are sent to the label
+printer app (to show the preview and print), and they're only kept if you
+save the address (below).
+
+## Saved addresses
+
+On the Address label page, **Save address label** keeps the whole label (name,
+address, note and icon) under the name, so you can reprint it later from
+**Load a saved address label** without finding the contact again. Saving a name
+that's already saved updates it. To delete one, open **Manage saved
+address labels** (every saved name with a **Delete** button), or load it and
+use **Delete saved address label**. Deleting removes it from the app for good;
+copies in backups or NAS snapshots made before then aren't affected.
+
+Saved addresses are **encrypted** in `data/addresses.enc`, with the key in
+`data/addresses.key`. Both files are readable only by the app. They aren't
+included in the settings the page loads. A copy of `addresses.enc` on its
+own can't be read, so if you back up `data/` somewhere else, you can leave
+`addresses.key` out of that backup to keep the addresses private. If you
+do, you'll lose access to the saved addresses if the NAS's copy of the key
+is lost. Addresses are encrypted rather than hashed because a hash can't be
+turned back into an address to print.
 
 ## Optional password
 
@@ -333,6 +403,18 @@ rest_command:
     # password: !secret labelprinter_password
 ```
 
+To open a page from a dashboard, use a button card with a link (use the
+address your phone or browser reaches the app on, not 127.0.0.1):
+
+```yaml
+type: button
+name: Luggage label
+icon: mdi:bag-suitcase
+tap_action:
+  action: url
+  url_path: https://labels.example.lan/#luggage
+```
+
 Example action – a battery label:
 
 ```yaml
@@ -350,7 +432,7 @@ data:
 |---|---|
 | `POST /api/preview/<type>` | PNG preview (header `X-Label-Length-mm`) |
 | `POST /api/print/<type>` | Print → `{"ok": true/false, "message": "…"}` (add `"copies": n`). Checks the printer first: if it reports a problem nothing is sent and the reply is HTTP 409 with the reason, plus the full status under `printer`. |
-| `GET/PUT /api/settings` | Saved details (`me`), `food_presets`, `trips`, battery types, `printer` (`host`, `port`, `model`), `timezone` (e.g. `Europe/London`), `temp_unit` (`C`/`F`), `accent` (`green`/`blue`/`red`/`pink`/`purple`/`orange`/`mono`); `password_set` is read-only |
+| `GET/PUT /api/settings` | Saved details (`me`), `food_presets` (saved food labels), `saved_notes` (`{"address": [{"text", "align"}], "food": [...]}`), `trips`, `battery_presets` (`[{"device", "battery"}]`), battery types, `printer` (`host`, `port`, `model`), `timezone` (e.g. `Europe/London`), `temp_unit` (`C`/`F`), `accent` (`green`/`blue`/`red`/`pink`/`purple`/`orange`/`mono`); `password_set` is read-only |
 | `GET /api/options` | Printer models and time zone names |
 | `GET /api/printer/status` | Is the printer ready and which roll is loaded → `{"ok", "state", "message", "media", "source", "detail"}`; `state` is `ready`, `unavailable`, `cover_open`, `no_media`, `wrong_media` or `error`. Prints nothing. |
 | `POST /api/printer/test` | Check the printer can be reached without printing (body `host`/`port`, or empty to test the saved one) |
@@ -358,19 +440,18 @@ data:
 | `GET /api/icons/<name>` | Small PNG of an icon |
 | `POST /api/icons` | Upload a custom icon (multipart form: `name`, `file`) |
 | `DELETE /api/icons/<name>` | Delete a custom icon |
-| `POST /api/travel/parse` | Pick one flight out of pasted text: `{"text": "…"}` → `{"leg": {…}, "missing": […], "more": true/false}` |
+| `POST /api/luggage/parse` | Pick one flight out of pasted text: `{"text": "…"}` → `{"leg": {…}, "missing": […], "more": true/false}` |
 | `POST /api/login`, `POST /api/logout`, `PUT /api/password` | Optional password: log in/out; set, change or remove (`{"current": "…", "new": "…"}`, empty `new` removes) |
 
 If a password is set, every call except `/api/login` and `/health` needs a
 login session or HTTP Basic auth, and answers `401` otherwise.
 
-`<type>` = `address`, `food`, `travel`, `battery`, `network` (`freezer`
-still works as the old name for `food`).
+`<type>` = `address`, `food`, `luggage`, `battery`, `network`.
 
 Fields:
-- **address:** `name`, `address` (lines separated by newlines), `icon`
-- **food:** `title`, `storage` (`frozen` / `fridge` / `cupboard`), `date` (YYYY-MM-DD, default today), `shelf` (number), `shelf_unit` (`days` / `months`), `method` (`from_frozen` / `defrost` / `cook` / `none`), `minutes`, `temp`, `fan` (in the Settings unit), `notes`. The old freezer fields `frozen`, `months`, `temp_c`, `fan_c` still work.
-- **travel:** `name`, `address`, `phone`, and either `legs` (list of `{"date": "YYYY-MM-DD", "flight", "from", "to", "dep": "HHMM", "arr": "HHMM", "plus1": true/false}` – sorted and split into journeys for you) or `flights` (text as typed, blank line between journeys)
+- **address:** `name`, `address` (lines separated by newlines), `icon`, `note` (optional, printed small under the address), `note_align` (`left` / `center`)
+- **food:** `title`, `storage` (`frozen` / `fridge` / `cupboard`), `date` (YYYY-MM-DD, default today), `shelf` (number), `shelf_unit` (`days` / `months`), `method` (`from_frozen` / `defrost` / `cook` / `none`), `appliance` (`oven` / `air_fryer` / `microwave` / `hob`; leave it out for the older oven-style line with no name in front), `minutes`, `temp` (oven, air fryer; in the Settings unit), `fan` (oven), `watts` (microwave), `notes`.
+- **luggage:** `name`, `address`, `phone`, and either `legs` (list of `{"date": "YYYY-MM-DD", "flight", "from", "to", "dep": "HHMM", "arr": "HHMM", "plus1": true/false}` – sorted and split into journeys for you) or `flights` (text as typed, blank line between journeys)
 - **battery:** `device`, `battery`, `changed` (YYYY-MM-DD, default today)
 - **network:** `name`, `ip`, `vlan`, `mac`, `notes`
 
@@ -387,7 +468,11 @@ it, including commercially; if you share a changed version, it must stay
 under the same licence with its source code available. It comes with no
 warranty.
 
+Page icons are from [Lucide](https://lucide.dev) (ISC licence, compatible
+with the GPL).
+
 It is built on [`brother_ql_next`](https://pypi.org/project/brother_ql_next/)
 (GPL-3.0), which turns labels into the printer's commands – which is why
 this project uses the GPL too. The other libraries it uses (Flask, Werkzeug,
-Pillow, waitress) have permissive licences compatible with the GPL.
+Pillow, waitress, cryptography) have permissive licences compatible with
+the GPL.

@@ -3,7 +3,7 @@
 Read this before changing the code. It explains what we're building, the decisions already made
 and the constraints that aren't obvious from the code.
 
-_Last updated: 2026-11-09 20:00 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
+_Last updated: 2026-11-10 12:10 GMT · Owner: Ash @ Distant Galaxy (@distantgalaxy-net)_
 
 ---
 
@@ -24,11 +24,12 @@ AB1 2CD", `192.168.1.20`, `labels.home.example`).
 
 **Built:**
 - Flask web page + JSON API, rendered with Pillow, printed with `brother_ql_next`.
-- Label types: `address` (optional icon – 18 built-ins drawn in code, plus
+- Label types: `address` (optional note under the address: full width,
+  small text, left or centred; optional icon – 18 built-ins drawn in code, plus
   the user's own uploaded/deleted in the page, names must be new; long
   names move above the icon or wrap onto two lines), `food` (freezer/fridge/cupboard, use-by in days or months,
-  cooking instructions, notes, presets; `freezer` is an API alias),
-  `travel` (saved details shown locked with Edit/Clear; flights built one
+  cooking instructions, notes, presets),
+  `luggage` (saved details shown locked with Edit/Clear; flights built one
   by one or pasted, sorted, split into journeys; saved trips), `battery`
   (tiny), `network` (name/IP/VLAN/MAC).
 - **Settings tab** holds everything install-specific: printer model, IP
@@ -49,7 +50,11 @@ AB1 2CD", `192.168.1.20`, `labels.home.example`).
   in the browser (`parseVCards` in `index.html`: vCard 2.1/3.0/4.0,
   folded lines, quoted-printable, Apple `itemN.X-ABLabel` labels). Never
   uploaded or stored. Works on every device; computers can drop the file
-  on the Address tab. Several contacts → name list (search when > 8).
+  on the Address tab. Several contacts → name list (search when > 8). The
+  name is FN plus N's title (prefix) and suffix when FN leaves them out
+  (`nameWithTitle`), all in the one Name box so it can be edited. Only the
+  chosen name and address reach the server (preview/print); nothing is
+  stored. The Address tab says so.
 - **Contact picker** (Address tab, Android only): the browser's Contact Picker API
   (`navigator.contacts.select(["name","address"])`), all in the page – no
   server code, nothing stored. Shown only when the API exists, the page is
@@ -84,6 +89,29 @@ AB1 2CD", `192.168.1.20`, `labels.home.example`).
   media name e.g. `62mm / 2.4"` or `29mm x 90mm / 1.1" x 3.5"`). Needs
   UDP 161 allowed through any firewall. Settings → Check printer shows the
   raw reply for other models.
+- **Menu:** one icon button per page (Lucide icons, ISC licence, inline
+  SVG), with the page name as the tooltip (`title`) and as the page title
+  (`#page-title`) under the menu. Settings sits at the right.
+- **Buttons, one rule:** filled (`btn2 primary`) for anything that does
+  something (save, print, check, upload, fill in); outline (`btn2`) only for
+  Cancel and Edit, which just change what you see; red outline
+  (`btn2 danger`) for delete or clear.
+- **Saved items, one layout:** fields first, then a "Saved … labels" group
+  (load list, Save/Update, Delete, and a folding "Manage saved … labels"
+  list with a Delete per row). Address labels are encrypted
+  (`addressbook.py`); food labels live in `settings.food_presets`, trips
+  in `settings.trips`, battery labels in `settings.battery_presets`. The
+  Luggage page keeps **My details** at the top, then Flights, then Saved
+  trips. Trips and battery labels share one manage-list script
+  (`fillManage`).
+- **Saved notes:** under the address note and food notes, a row to pick,
+  save or delete a reusable note, kept separately from saved labels
+  (`settings.saved_notes`, per page, each `{text, align}`; plain-text
+  notes from older versions read as left-aligned). The row is always
+  shown, so it's easy to find. One shared script (`setUpNoteRow`).
+- **Settings order:** Printer (ending with Test and save), Printer status,
+  Time zone (saves on change; on a new install Test and save also stores
+  it), Temperature unit, Colour, Password.
 - **Print** sits directly under the label preview (no fixed bottom bar),
   so what you see and the button are together.
 - **Messages** appear next to the button that caused them (`say()` in
@@ -143,6 +171,11 @@ covers every device without either.
 - Never return or log the password hash; `GET /api/settings` only exposes
   `password_set`. `auth.json` and `secret.key` are written with mode 600
   and are git-ignored. Changing/removing the password needs the current one.
+- **Saved addresses** (`app/addressbook.py`, `/api/addresses`): encrypted
+  with Fernet (`cryptography`) in `data/addresses.enc`, key in
+  `data/addresses.key`, both mode 600 and git/Docker-ignored. Never put
+  them in `settings.json` or `/api/settings`; the list endpoint returns
+  names only. Encryption, not hashing, because they must be printable.
 - `RESET_PASSWORD=true` (env) removes the password at start-up – the
   documented recovery path.
 
@@ -163,6 +196,7 @@ app/main.py        Flask routes, settings load/save (atomic write), login gate
 app/auth.py        Optional password: hash storage, cookie key, reset
 app/labels.py      All label layouts + built-in icons (drawn with Pillow)
 app/printer.py     Image -> QL raster -> send to printer; models; address checks
+app/addressbook.py Saved address labels, encrypted on disk
 app/status.py      Printer ready? Roll loaded? (connection, ESC i S, SNMP)
 app/static/index.html  Phone-first page (vanilla JS, no build step)
 app/static/login.html  Password page (only used when a password is set)
@@ -196,7 +230,7 @@ automatically.
   release number (e.g. `1.2.0`) in the pull request, then publish a GitHub
   release tagged `v1.2.0`. The publish workflow refuses a tag that doesn't
   match `app/VERSION`. The next test build after `1.2.0` is `1.2.1`.
-- Released so far: v1.0.0, v1.1.0, v1.2.0.
+- Released so far: v1.0.0, v1.1.0, v1.2.0, v1.3.0.
 
 ## Coding conventions
 
@@ -283,6 +317,51 @@ image is valid for a model (it raises if the size is wrong).
   read into the flight boxes for checking, then added.
 - 2026-11-08 – Accent colour choice in Settings (green default; blue, red,
   pink, purple, orange, monochrome), each tuned for light and dark themes.
+- 2026-11-10 – Icon menu with page titles; Travel shown as Luggage label;
+  one button rule; Settings reordered with time zone saving on change;
+  saved food labels laid out like saved address labels; saved notes.
+- 2026-11-10 – Saved notes keep their alignment; Saved trips moved into
+  their own group under Flights, with a manage list; saved battery
+  labels (device and battery type, `battery_presets`).
+- 2026-11-10 – Address page order: label fields, then Fill in from your
+  contacts, then Saved address labels, then Your own icons.
+- 2026-11-10 – Food page: Days/Months sits on the same line as the Use
+  within number, with the date on its own line above, so the unit clearly
+  belongs to Use within.
+- 2026-11-11 – Food cooking instructions: choose Oven, Air fryer,
+  Microwave or Hob; only the matching boxes show (temperature, fan,
+  watts) and the label prints e.g. "Microwave: 5 min @ 900W". Steps
+  and stirring go in the notes (saved notes make these one tap).
+  Requests without `appliance` print as before.
+- 2026-11-11 – The travel label is now `luggage` everywhere: API kind,
+  `/api/luggage/parse`, the page and its browser storage. No alias for
+  `travel`, and the old `freezer` name and freezer-only fields (`frozen`,
+  `months`, `temp_c`, `fan_c`, `freezer_presets`) are gone too: nothing
+  was using them.
+- 2026-11-11 – Luggage: "Lands the next day (+1)" sits under Arrives, so it
+  reads as part of the landing time and the From/To and Departs/Arrives
+  boxes stay lined up. Boxes in a row can now shrink to their column
+  (date boxes no longer run into the box beside them on a phone).
+- 2026-11-11 – **Clear label** on the Address, Food, Battery and Network
+  pages (`clearForm`: `form.reset()` back to the page's starting values,
+  then dates set to today and the page's buttons refreshed). No "are you
+  sure?": it only empties boxes, nothing saved is touched.
+- 2026-11-11 – Page links: `/#address`, `/#food`, `/#luggage`,
+  `/#battery`, `/#network`, `/#settings` open that page (e.g. from a Home
+  Assistant dashboard). The `#page` is removed from the address bar with
+  `history.replaceState` once shown, so the URL doesn't change while
+  moving around. `hashchange` is followed too, and the login page and the
+  401 redirect carry the `#page` through sign-in.
+- 2026-11-10 – Saved addresses (encrypted, by name) for quick reprints.
+  New dependency `cryptography` (Apache-2.0/BSD, GPL-compatible). Address
+  tab reordered: label fields first, then saved addresses, then folding
+  sections for contacts and icons (open state remembered per browser).
+  A folding "Manage saved addresses" list gives each name a Delete button
+  (search when > 8). No key rotation on delete: overkill for a home service;
+  the README notes that earlier backups/snapshots keep their copies.
+- 2026-11-10 – Address label: optional small note under the address
+  (left or centred); contact card titles/suffixes added to the name;
+  privacy note on the Address tab.
 - 2026-11-09 – v1.2.0: everything from 1.1.1–1.1.15 (food labels, custom
   icons, flight builder, colours, contacts, printer status, new icons).
 - 2026-11-09 – Icon uploads must use a new name: one already used by the
@@ -323,3 +402,9 @@ image is valid for a model (it raises if the size is wrong).
 - 2026-11-08 – Distributed as a Docker Hub image built by GitHub Actions,
   so installs and updates are a download instead of copying code. `data/`
   is excluded from the build context (`.dockerignore`).
+- 2026-11-11 – v1.3.0: everything from 1.2.1–1.2.12 (saved address labels,
+  encrypted; address note; saved notes with alignment; saved food,
+  battery and trip labels in one layout; icon menu with page titles;
+  Luggage label (API kind `luggage`); cooking appliances; Clear label;
+  page links; tidier Settings and food/flight forms). The old API names
+  `travel` and `freezer` are gone.

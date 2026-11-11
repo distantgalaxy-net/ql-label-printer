@@ -1,7 +1,7 @@
 <!doctype html>
 <!--
   labelprinter - label printing page (phone-first)
-  Date: 2026-11-09 19:40 GMT (updated; first written 2026-11-07 18:15 GMT)
+  Date: 2026-11-11 12:00 GMT (updated; first written 2026-11-07 18:15 GMT)
   Developer: Ash @ Distant Galaxy (@distantgalaxy-net)
   One form per label type; the preview updates as you type, then Print.
   The Settings tab holds the printer (model, IP address, port), the time
@@ -17,6 +17,10 @@
   disabled with a message such as "Printer cover open" until it's ready.
   An optional password (Settings tab) protects the page; if one is set and
   the login has expired, any API call answers 401 and we go to /login.
+  A link can open a page directly: /#address, /#food, /#luggage, /#battery,
+  /#network or /#settings (e.g. from a Home Assistant dashboard button). The
+  "#page" is removed from the address bar once the page is shown, so the
+  address stays the same as you move around.
   Everything saved (presets, details, trips, icons) lives on the server in
   /data - never in this repo or the Docker image.
   Address tab: two ways to fill in an address from contacts.
@@ -58,8 +62,14 @@
   .wrap { max-width: 560px; margin: 0 auto; padding: 14px 16px calc(24px + env(safe-area-inset-bottom)); }
   h1 { font-size: 1.25rem; margin: 4px 0 12px; }
   .top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
-  nav { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 12px; }
-  nav button { flex: none; border: 1px solid var(--line); background: var(--card); color: var(--fg);
+  /* Icon menu: square buttons, Settings pushed to the right */
+  nav { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 6px; }
+  nav button { flex: none; width: 46px; height: 46px; display: grid; place-items: center; padding: 0 !important;
+    border-radius: 12px !important; }
+  nav button[data-kind="settings"] { margin-left: auto; }
+  nav button svg { display: block; }
+  .pagetitle { font-size: 1.15rem; margin: 6px 0 12px; }
+  nav button { border: 1px solid var(--line); background: var(--card); color: var(--fg);
     padding: 8px 14px; border-radius: 999px; font: inherit; font-size: .95rem; cursor: pointer; }
   nav button:disabled { opacity: .4; cursor: not-allowed; }
   nav button[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
@@ -71,11 +81,20 @@
   textarea { min-height: 96px; resize: vertical; }
   textarea.mono { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: .9rem; }
   .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+  /* Let boxes in a row shrink to their column (date boxes are wider by default
+     and would otherwise run into the box beside them on a phone) */
+  .row > *, .row input:not([type="checkbox"]):not([type="radio"]) { min-width: 0; }
   .seg { display: flex; gap: 6px; flex-wrap: wrap; }
   .seg label { display: flex; align-items: center; gap: 6px; color: var(--fg); border: 1px solid var(--line);
     border-radius: 8px; padding: 8px 10px; background: var(--field); cursor: pointer; }
   .seg label:has(input:checked) { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
   .seg input { width: auto; }
+  /* Use within (food): caption, then the number and Days/Months side by side */
+  .within { display: grid; gap: 4px; }
+  .fieldcap { font-size: .9rem; color: var(--muted); }
+  .withinrow { display: flex; gap: 8px; align-items: stretch; }
+  .withinrow > input { width: 90px; flex: none; }
+  .withinrow .seg { flex-wrap: nowrap; }
   /* Radio buttons and tick boxes follow the chosen accent colour */
   input[type="radio"], input[type="checkbox"] { accent-color: var(--accent); }
   .check { display: flex; align-items: center; gap: 8px; color: var(--fg); }
@@ -117,6 +136,9 @@
   .list li .grow { flex: 1; min-width: 0; overflow-wrap: anywhere; }
   .list li.break { border: 0; background: none; padding: 0 8px; color: var(--muted); font-size: .8rem; }
   .addrtext { white-space: pre-line; text-align: left; }
+  /* Saved notes row under a note box: list + Save / Delete */
+  .noterow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: -4px; }
+  .noterow select { flex: 1; min-width: 160px; padding: 6px 8px; font-size: .9rem; }
   .addrtext b { display: block; font-size: .8rem; color: var(--muted); font-weight: 600; }
   form.dropping { outline: 2px dashed var(--accent); outline-offset: 6px; border-radius: 8px; }
   .legtext { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: .85rem; }
@@ -140,14 +162,17 @@
 <body>
 <div class="wrap">
   <div class="top"><h1>Label Printer</h1><button type="button" class="linkbtn" id="logout" hidden>Log out</button></div>
-  <nav role="tablist" id="tabs">
-    <button role="tab" data-kind="address">Address</button>
-    <button role="tab" data-kind="food">Food</button>
-    <button role="tab" data-kind="travel">Travel</button>
-    <button role="tab" data-kind="battery">Battery</button>
-    <button role="tab" data-kind="network">Network</button>
-    <button role="tab" data-kind="settings">Settings</button>
+  <!-- Menu: one icon per page (Lucide icons, ISC licence: lucide.dev).
+       The name shows as a tooltip on hover, and as the page title below. -->
+  <nav role="tablist" id="tabs" aria-label="Pages">
+    <button role="tab" data-kind="address" title="Address label" aria-label="Address label"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7"/><rect x="2" y="4" width="20" height="16" rx="2"/></svg></button>
+    <button role="tab" data-kind="food" title="Food label" aria-label="Food label"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/></svg></button>
+    <button role="tab" data-kind="luggage" title="Luggage label" aria-label="Luggage label"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/></svg></button>
+    <button role="tab" data-kind="battery" title="Battery label" aria-label="Battery label"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 10v4"/><path d="M10 10v4"/><path d="M14 10v4"/><path d="M22 14v-4"/><rect x="2" y="6" width="16" height="12" rx="2"/></svg></button>
+    <button role="tab" data-kind="network" title="Network device label" aria-label="Network device label"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/></svg></button>
+    <button role="tab" data-kind="settings" title="Settings" aria-label="Settings"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></svg></button>
   </nav>
+  <h2 class="pagetitle" id="page-title">Address label</h2>
 
   <div class="preview" id="preview-box">
     <div class="paper"><img id="preview" alt="Label preview"></div>
@@ -162,43 +187,90 @@
     <!-- Printer state: "Printer ready · 62mm continuous", or the problem -->
     <div class="pstate" id="pstate" role="status" hidden>
       <span class="grow" id="pstate-text"></span>
-      <button type="button" class="btn2 mini" id="pstate-retry" hidden>Check again</button>
+      <button type="button" class="btn2 primary mini" id="pstate-retry" hidden>Check again</button>
     </div>
   </div>
 
   <div class="card">
     <!-- Address -->
     <form data-kind="address" hidden>
-      <!-- Contacts: the picker button only shows where it can share
-           addresses (Chrome on Android over HTTPS); importing a contact
-           card works everywhere -->
-      <div class="actions">
-        <button type="button" class="btn2 primary" id="c-pick" hidden>Choose from contacts</button>
-        <button type="button" class="btn2" id="c-import">Import contact card</button>
-        <input type="file" id="c-file" accept=".vcf,text/vcard,text/x-vcard" hidden>
-      </div>
-      <p class="small" id="c-note" hidden></p>
-      <!-- Shown when a contact card file holds more than one contact -->
-      <div class="group" id="c-people" hidden>
-        <h3 id="c-people-title">Which contact?</h3>
-        <input id="c-search" type="search" placeholder="Search names" autocomplete="off" hidden>
-        <ul class="list" id="c-names"></ul>
-        <div class="actions"><button type="button" class="btn2" id="c-people-cancel">Cancel</button></div>
-      </div>
-      <!-- Shown when the chosen contact has more than one address -->
-      <div class="group" id="c-choose" hidden>
-        <h3 id="c-choose-title">Which address?</h3>
-        <ul class="list" id="c-addresses"></ul>
-        <div class="actions"><button type="button" class="btn2" id="c-cancel">Cancel</button></div>
-      </div>
-      <p class="msg" id="msg-contacts" role="status"></p>
+      <!-- 1. The label itself: what most visits are about -->
       <label>Name<input id="a-name" name="name" autocomplete="off" placeholder="Alex Example"></label>
       <label>Address (one line per row)<textarea id="a-address" name="address" placeholder="1 High Street&#10;Anytown&#10;AB1 2CD"></textarea></label>
+      <!-- Optional note: printed small, across the full width, under the address -->
+      <label>Note (optional)<textarea id="a-note" name="note" style="min-height:60px" placeholder="Please leave with a neighbour"></textarea></label>
+      <div class="seg" role="radiogroup" aria-label="Note alignment">
+        <label><input type="radio" name="note_align" value="left" checked> Left</label>
+        <label><input type="radio" name="note_align" value="center"> Centre</label>
+      </div>
+      <!-- Saved notes: reuse a note (and its alignment) on any address label -->
+      <div class="noterow" data-notes="address" data-for="a-note" data-align="note_align">
+        <select class="note-pick" aria-label="Saved notes"><option value="">Use a saved note…</option></select>
+        <button type="button" class="btn2 primary mini note-save">Save note</button>
+        <button type="button" class="btn2 danger mini note-del" hidden>Delete note</button>
+      </div>
+      <p class="msg" id="msg-note-address" role="status"></p>
       <div class="iconpick">
         <label>Icon<select id="a-icon" name="icon"><option value="none">None</option></select></label>
         <img class="thumb" id="a-icon-thumb" alt="Selected icon" hidden>
       </div>
-      <details id="i-manage">
+      <!-- Clear label: empties this page's boxes (saved labels and notes stay) -->
+      <div class="actions"><button type="button" class="btn2 danger clear-form">Clear label</button></div>
+      <p class="msg" id="msg-clear-address" role="status"></p>
+
+      <!-- 2. Fill in from contacts (folds away). The picker button only
+           shows where it can share addresses (Chrome on Android over
+           HTTPS); importing a contact card works everywhere -->
+      <details id="c-section" data-remember="labelprinter-open-contacts">
+        <summary>Fill in from your contacts</summary>
+        <div class="inner">
+        <div class="actions">
+          <button type="button" class="btn2 primary" id="c-pick" hidden>Choose from contacts</button>
+          <button type="button" class="btn2 primary" id="c-import">Import contact card</button>
+          <input type="file" id="c-file" accept=".vcf,text/vcard,text/x-vcard" hidden>
+        </div>
+        <p class="small" id="c-note" hidden></p>
+        <!-- Shown when a contact card file holds more than one contact -->
+        <div class="group" id="c-people" hidden>
+          <h3 id="c-people-title">Which contact?</h3>
+          <input id="c-search" type="search" placeholder="Search names" autocomplete="off" hidden>
+          <ul class="list" id="c-names"></ul>
+          <div class="actions"><button type="button" class="btn2" id="c-people-cancel">Cancel</button></div>
+        </div>
+        <!-- Shown when the chosen contact has more than one address -->
+        <div class="group" id="c-choose" hidden>
+          <h3 id="c-choose-title">Which address?</h3>
+          <ul class="list" id="c-addresses"></ul>
+          <div class="actions"><button type="button" class="btn2" id="c-cancel">Cancel</button></div>
+        </div>
+        <p class="msg" id="msg-contacts" role="status"></p>
+        <p class="small">Your contacts stay on this device: contact cards and the phone's contact list are read here, in your browser. Only the name and address you choose are sent to this label printer app, to show the preview and print the label. They're only kept if you choose Save address label.</p>
+        </div>
+      </details>
+
+      <!-- 3. Saved addresses: reprint without finding the contact again -->
+      <div class="group">
+        <h3>Saved address labels</h3>
+        <label>Load a saved address label<select id="s-saved"><option value="">Choose a name…</option></select></label>
+        <div class="actions">
+          <button type="button" class="btn2 primary" id="s-save-address">Save address label</button>
+          <button type="button" class="btn2 danger" id="s-delete-address" hidden>Delete saved address label</button>
+        </div>
+        <p class="msg" id="msg-saved" role="status"></p>
+        <p class="small">Saves the whole label (name, address, note and icon) under the name, encrypted on this label printer app's server.</p>
+        <!-- Every saved name with its own Delete button (folds away) -->
+        <details id="s-manage" data-remember="labelprinter-open-saved">
+          <summary id="s-manage-title">Manage saved address labels</summary>
+          <div class="inner">
+          <input id="s-search" type="search" placeholder="Search names" autocomplete="off" hidden>
+          <ul class="list" id="s-list"></ul>
+          <p class="small" id="s-none">No saved address labels yet.</p>
+          </div>
+        </details>
+      </div>
+
+      <!-- 4. Your own icons (folds away) -->
+      <details id="i-manage" data-remember="labelprinter-open-icons">
         <summary>Your own icons (upload or delete)</summary>
         <div class="inner">
         <p class="small">Upload any picture. It's turned into a black-and-white square (about 16mm on the label): white margins are trimmed and light colours become white. Bold, simple shapes on a plain background work best. Icons are saved on this server only.</p>
@@ -216,20 +288,24 @@
 
     <!-- Food (freezer, fridge or cupboard) -->
     <form data-kind="food" hidden>
-      <label>Saved food (preset)<select id="f-preset"><option value="">Choose a saved food…</option></select></label>
       <div class="seg" role="radiogroup" aria-label="Where it's kept">
         <label><input type="radio" name="storage" value="frozen" checked> Freezer</label>
         <label><input type="radio" name="storage" value="fridge"> Fridge</label>
         <label><input type="radio" name="storage" value="cupboard"> Cupboard</label>
       </div>
       <label>Food<input id="f-title" name="title" autocomplete="off" placeholder="Beef chilli"></label>
-      <div class="row">
-        <label><span id="f-date-label">Frozen on</span><input id="f-date" name="date" type="date"></label>
-        <label>Use within<input id="f-shelf" name="shelf" type="number" min="0" max="999" inputmode="numeric"></label>
-      </div>
-      <div class="seg" role="radiogroup" aria-label="Use within days or months">
-        <label><input type="radio" name="shelf_unit" value="days"> Days</label>
-        <label><input type="radio" name="shelf_unit" value="months" checked> Months</label>
+      <label><span id="f-date-label">Frozen on</span><input id="f-date" name="date" type="date"></label>
+      <!-- Use within: the number and its unit (days or months) on one line,
+           so the unit clearly belongs to it -->
+      <div class="within" role="group" aria-labelledby="f-within-label">
+        <span class="fieldcap" id="f-within-label">Use within</span>
+        <div class="withinrow">
+          <input id="f-shelf" name="shelf" type="number" min="0" max="999" inputmode="numeric" aria-labelledby="f-within-label">
+          <div class="seg" role="radiogroup" aria-label="Days or months">
+            <label><input type="radio" name="shelf_unit" value="days"> Days</label>
+            <label><input type="radio" name="shelf_unit" value="months" checked> Months</label>
+          </div>
+        </div>
       </div>
       <h2>Cooking instructions</h2>
       <div class="seg" role="radiogroup" aria-label="How to cook" id="f-methods">
@@ -238,25 +314,58 @@
         <label data-for="fridge cupboard"><input type="radio" name="method" value="cook"> Add instructions</label>
         <label><input type="radio" name="method" value="none"> None</label>
       </div>
-      <div class="row" id="f-cook">
-        <label>Minutes<input id="f-minutes" name="minutes" type="number" min="0" inputmode="numeric"></label>
-        <label><span class="unit-label">Temp °C</span><input id="f-temp" name="temp" type="number" min="0" inputmode="numeric"></label>
-        <label><span class="unit-label" data-fan>Fan °C</span><input id="f-fan" name="fan" type="number" min="0" inputmode="numeric"></label>
+      <!-- What it's cooked in, then only the boxes that make sense for it
+           (data-app lists the appliances a box is shown for). Steps such as
+           "3 min, stir, then 2 min" go in the notes. -->
+      <div id="f-cook" style="display:grid;gap:10px">
+        <span class="fieldcap" id="f-app-label">Cook in</span>
+        <div class="seg" role="radiogroup" aria-labelledby="f-app-label" id="f-appliances" style="margin-top:-6px">
+          <label><input type="radio" name="appliance" value="oven" checked> Oven</label>
+          <label><input type="radio" name="appliance" value="air_fryer"> Air fryer</label>
+          <label><input type="radio" name="appliance" value="microwave"> Microwave</label>
+          <label><input type="radio" name="appliance" value="hob"> Hob</label>
+        </div>
+        <div class="row">
+          <label>Minutes<input id="f-minutes" name="minutes" type="number" min="0" inputmode="numeric"></label>
+          <label data-app="oven air_fryer"><span class="unit-label">Temp °C</span><input id="f-temp" name="temp" type="number" min="0" inputmode="numeric"></label>
+          <label data-app="oven"><span class="unit-label" data-fan>Fan °C</span><input id="f-fan" name="fan" type="number" min="0" inputmode="numeric"></label>
+          <label data-app="microwave">Watts<input id="f-watts" name="watts" type="number" min="0" max="3000" step="50" inputmode="numeric" placeholder="900"></label>
+        </div>
       </div>
       <label>Notes (optional)<textarea id="f-notes" name="notes" style="min-height:60px" placeholder="Stir halfway"></textarea></label>
+      <!-- Saved notes: reuse a cooking note on any food label -->
+      <div class="noterow" data-notes="food" data-for="f-notes">
+        <select class="note-pick" aria-label="Saved notes"><option value="">Use a saved note…</option></select>
+        <button type="button" class="btn2 primary mini note-save">Save note</button>
+        <button type="button" class="btn2 danger mini note-del" hidden>Delete note</button>
+      </div>
+      <p class="msg" id="msg-note-food" role="status"></p>
+      <!-- Clear label: empties this page's boxes (saved labels and notes stay) -->
+      <div class="actions"><button type="button" class="btn2 danger clear-form">Clear label</button></div>
+      <p class="msg" id="msg-clear-food" role="status"></p>
+      <!-- Saved food labels: same layout as saved address labels -->
       <div class="group">
-        <h3>Presets</h3>
-        <p class="small">A preset saves everything on this form except the date. When you pick it again the date is today and the use-by date is worked out again. Presets are saved on this server.</p>
+        <h3>Saved food labels</h3>
+        <label>Load a saved food label<select id="f-preset"><option value="">Choose a food…</option></select></label>
         <div class="actions">
-          <button type="button" class="btn2 primary" id="f-save">Save as preset</button>
-          <button type="button" class="btn2 danger" id="f-delete" hidden>Delete preset</button>
+          <button type="button" class="btn2 primary" id="f-save">Save food label</button>
+          <button type="button" class="btn2 danger" id="f-delete" hidden>Delete saved food label</button>
         </div>
         <p class="msg" id="msg-food" role="status"></p>
+        <p class="small">Saves everything on this page except the date, under the food's name. When you load it, the date is today and the use-by date is worked out again.</p>
+        <details id="f-manage" data-remember="labelprinter-open-food">
+          <summary id="f-manage-title">Manage saved food labels</summary>
+          <div class="inner">
+          <input id="f-search" type="search" placeholder="Search foods" autocomplete="off" hidden>
+          <ul class="list" id="f-list"></ul>
+          <p class="small" id="f-none">No saved food labels yet.</p>
+          </div>
+        </details>
       </div>
     </form>
 
     <!-- Travel -->
-    <form data-kind="travel" hidden>
+    <form data-kind="luggage" hidden>
       <div class="group">
         <h3>My details</h3>
         <!-- Saved details are shown locked; Edit unlocks them -->
@@ -282,7 +391,6 @@
 
       <div class="group">
         <h3>Flights</h3>
-        <label>Saved trip<select id="t-trip"><option value="">Load a saved trip…</option></select></label>
         <ul class="list" id="t-legs"></ul>
         <p class="small" id="t-legs-none">No flights yet. Add them below, in any order: they're sorted by date, and a gap of more than a day starts a new journey.</p>
 
@@ -306,11 +414,15 @@
             <label>From (airport)<input id="l-from" list="airports" autocomplete="off" maxlength="4" placeholder="AAA" spellcheck="false"></label>
             <label>To (airport)<input id="l-to" list="airports" autocomplete="off" maxlength="4" placeholder="BBB" spellcheck="false"></label>
           </div>
+          <!-- "+1" sits under Arrives (it's about the landing time), so the
+               From/To and Departs/Arrives boxes stay lined up -->
           <div class="row">
-            <label>Departs<input id="l-dep" type="time"></label>
-            <label>Arrives<input id="l-arr" type="time"></label>
+            <label style="align-self:start">Departs<input id="l-dep" type="time"></label>
+            <div style="display:grid;gap:8px;align-content:start">
+              <label>Arrives<input id="l-arr" type="time"></label>
+              <label class="check"><input id="l-plus1" type="checkbox"> Lands the next day (+1)</label>
+            </div>
           </div>
-          <label class="check"><input id="l-plus1" type="checkbox"> Lands the next day (+1)</label>
           <div class="actions">
             <button type="button" class="btn2 primary" id="l-add">Add flight</button>
             <button type="button" class="btn2" id="l-cancel" hidden>Cancel</button>
@@ -318,16 +430,29 @@
           <p class="msg" id="msg-legs" role="status"></p>
         </div>
         <datalist id="airports"></datalist>
+        <div class="actions"><button type="button" class="btn2 danger" id="t-clear">Clear flights</button></div>
+        <p class="msg" id="msg-clear" role="status"></p>
+      </div>
 
-        <div class="row">
-          <label>Trip name<input id="t-trip-name" maxlength="60" autocomplete="off" placeholder="e.g. Summer holiday"></label>
-        </div>
+      <!-- Saved trips: same layout as saved address and food labels -->
+      <div class="group">
+        <h3>Saved trips</h3>
+        <label>Load a saved trip<select id="t-trip"><option value="">Choose a trip…</option></select></label>
+        <label>Trip name<input id="t-trip-name" maxlength="60" autocomplete="off" placeholder="e.g. Summer holiday"></label>
         <div class="actions">
           <button type="button" class="btn2 primary" id="t-trip-save">Save trip</button>
           <button type="button" class="btn2 danger" id="t-trip-delete" hidden>Delete saved trip</button>
-          <button type="button" class="btn2" id="t-clear">Clear flights</button>
         </div>
         <p class="msg" id="msg-trip" role="status"></p>
+        <p class="small">Saves the flights on this page under the trip name. Your details are saved separately, above.</p>
+        <details id="t-manage" data-remember="labelprinter-open-trips">
+          <summary id="t-manage-title">Manage saved trips</summary>
+          <div class="inner">
+          <input id="t-search" type="search" placeholder="Search trips" autocomplete="off" hidden>
+          <ul class="list" id="t-list"></ul>
+          <p class="small" id="t-none">No saved trips yet.</p>
+          </div>
+        </details>
       </div>
     </form>
 
@@ -340,6 +465,28 @@
       </div>
       <datalist id="b-types"></datalist>
       <p class="small">Prints the smallest label your printer allows (about 13mm on most models).</p>
+      <!-- Clear label: empties this page's boxes (saved labels and notes stay) -->
+      <div class="actions"><button type="button" class="btn2 danger clear-form">Clear label</button></div>
+      <p class="msg" id="msg-clear-battery" role="status"></p>
+      <!-- Saved battery labels: same layout as saved address and food labels -->
+      <div class="group">
+        <h3>Saved battery labels</h3>
+        <label>Load a saved battery label<select id="b-saved"><option value="">Choose a device…</option></select></label>
+        <div class="actions">
+          <button type="button" class="btn2 primary" id="b-save">Save battery label</button>
+          <button type="button" class="btn2 danger" id="b-delete" hidden>Delete saved battery label</button>
+        </div>
+        <p class="msg" id="msg-battery" role="status"></p>
+        <p class="small">Saves the device and battery type under the device name. When you load it, the date is today.</p>
+        <details id="b-manage" data-remember="labelprinter-open-battery">
+          <summary id="b-manage-title">Manage saved battery labels</summary>
+          <div class="inner">
+          <input id="b-search" type="search" placeholder="Search devices" autocomplete="off" hidden>
+          <ul class="list" id="b-list"></ul>
+          <p class="small" id="b-none">No saved battery labels yet.</p>
+          </div>
+        </details>
+      </div>
     </form>
 
     <!-- Network -->
@@ -351,12 +498,15 @@
       </div>
       <label>MAC (optional)<input id="n-mac" name="mac" autocomplete="off"></label>
       <label>Notes (optional)<textarea id="n-notes" name="notes" style="min-height:60px"></textarea></label>
+      <!-- Clear label: empties this page's boxes (saved labels and notes stay) -->
+      <div class="actions"><button type="button" class="btn2 danger clear-form">Clear label</button></div>
+      <p class="msg" id="msg-clear-network" role="status"></p>
     </form>
 
     <!-- Settings: not a label, so the preview and Print button are hidden on this tab -->
     <form data-kind="settings" hidden>
       <p class="small" id="s-version">Version …</p>
-      <p class="info" id="s-welcome" hidden><strong>Welcome!</strong> Set up your printer to get started. Tap <strong>Test and save</strong>: it checks it can reach the printer, then unlocks the label tabs.</p>
+      <p class="info" id="s-welcome" hidden><strong>Welcome!</strong> Set up your printer to get started. Check the time zone below, then tap <strong>Test and save</strong>: it checks it can reach the printer, then unlocks the label pages.</p>
       <h2>Printer</h2>
       <p class="small">Where to send labels. The printer needs a fixed IP address (set a DHCP reservation in your router) and must accept raw printing on the port below. Only the 62mm continuous roll (DK-22205) is supported.</p>
       <label>Printer model<select id="s-model"></select></label>
@@ -366,10 +516,6 @@
       </div>
       <p class="small">Brother printers use port 9100. If printing is refused, turn Editor Lite off on the printer. If a firewall sits between them, allow the machine running this service (e.g. your NAS) to reach the printer on this port.</p>
 
-      <h2>Time zone</h2>
-      <label>Time zone<select id="s-tz"><option value="">Choose…</option></select></label>
-      <div class="actions"><button type="button" class="btn2" id="s-tz-device">Use this device's time zone</button></div>
-      <p class="small" id="s-tz-now">Used for today's date on labels. Daylight saving (e.g. GMT → BST) changes automatically.</p>
       <div class="actions">
         <button type="button" class="btn2 primary" id="s-save">Test and save</button>
       </div>
@@ -377,9 +523,16 @@
 
       <h2>Printer status</h2>
       <p class="small">Asks the printer whether it's ready and which roll is loaded (nothing is printed). The details show exactly what the printer replied.</p>
-      <div class="actions"><button type="button" class="btn2" id="s-status">Check printer</button></div>
+      <div class="actions"><button type="button" class="btn2 primary" id="s-status">Check printer</button></div>
       <p class="msg" id="msg-status" role="status"></p>
       <pre class="detail" id="s-status-detail" hidden></pre>
+
+      <h2>Time zone</h2>
+      <p class="small">Used for today's date on labels. Saved straight away.</p>
+      <label>Time zone<select id="s-tz"><option value="">Choose…</option></select></label>
+      <div class="actions"><button type="button" class="btn2 primary" id="s-tz-device">Use this device's time zone</button></div>
+      <p class="small" id="s-tz-now">Daylight saving (e.g. GMT → BST) changes automatically.</p>
+      <p class="msg" id="msg-tz" role="status"></p>
 
       <h2>Temperature unit</h2>
       <p class="small">Used for cooking temperatures on food labels. Saved straight away.</p>
@@ -410,7 +563,7 @@
         <label>Confirm<input id="pw-confirm" type="password" autocomplete="new-password"></label>
       </div>
       <div class="actions">
-        <button type="button" class="btn2" id="pw-set">Set password</button>
+        <button type="button" class="btn2 primary" id="pw-set">Set password</button>
         <button type="button" class="btn2 danger" id="pw-remove" hidden>Remove password</button>
       </div>
       <p class="msg" id="msg-pw" role="status"></p>
@@ -425,7 +578,7 @@
 const _fetch = window.fetch.bind(window);
 window.fetch = async (...args) => {
   const r = await _fetch(...args);
-  if (r.status === 401) location.href = "/login";
+  if (r.status === 401) location.href = "/login" + location.hash;
   return r;
 };
 
@@ -435,7 +588,7 @@ let kind = "address";
 let previewTimer = null;
 let previewUrl = null;
 let icons = [];            // [{name, custom}] from the server
-let legs = [];             // flights on the travel label, kept sorted
+let legs = [];             // flights on the luggage label, kept sorted
 let editingLeg = -1;       // index in legs being edited, or -1 when adding
 const $ = (id) => document.getElementById(id);
 const STORAGE_NAMES = { frozen: "Freezer", fridge: "Fridge", cupboard: "Cupboard" };
@@ -466,7 +619,7 @@ function setRadio(form, name, value) {
   document.querySelectorAll(`form[data-kind="${form}"] input[name="${name}"]`).forEach(r => r.checked = r.value === value);
 }
 
-// Collect a form's named fields into a plain object. The travel label also
+// Collect a form's named fields into a plain object. The luggage label also
 // sends its list of flights (the flight-entry boxes have no names).
 function formData(k) {
   const f = document.querySelector(`form[data-kind="${k}"]`);
@@ -476,7 +629,7 @@ function formData(k) {
     if (el.type === "radio") { if (el.checked) out[el.name] = el.value; continue; }
     out[el.name] = el.value;
   }
-  if (k === "travel") out.legs = legs;
+  if (k === "luggage") out.legs = legs;
   return out;
 }
 
@@ -515,19 +668,27 @@ function setLocked(value) {
 // Show one tab's form. The Settings tab isn't a label, so it hides the
 // preview (with its Print button) and skips the preview request.
 function showTab(k) {
-  if (k === "freezer") k = "food";           // old name, from a saved last tab
   if (!document.querySelector(`form[data-kind="${k}"]`)) k = "address";
   if (locked && k !== "settings") return;   // labels stay locked until setup is done
   kind = k;
   const isSettings = k === "settings";
   document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.kind === k)));
+  // The page's name (the menu button's tooltip) as the first thing on the page
+  $("page-title").textContent = document.querySelector(`#tabs button[data-kind="${k}"]`).title;
   document.querySelectorAll("form[data-kind]").forEach(f => f.hidden = f.dataset.kind !== k);
   $("preview-box").hidden = isSettings;
   try { localStorage.setItem("labelprinter-tab", k); } catch (e) {}
+  // Opened from a link such as /#luggage: tidy the address bar again
+  if (location.hash) history.replaceState(null, "", location.pathname + location.search);
   clearMessages();
   if (!isSettings) schedulePreview(0);
 }
 document.querySelectorAll("#tabs button").forEach(b => b.addEventListener("click", () => showTab(b.dataset.kind)));
+// A #page link followed while the app is already open in this tab
+window.addEventListener("hashchange", () => {
+  const k = decodeURIComponent(location.hash.slice(1)).toLowerCase();
+  if (k && document.querySelector(`form[data-kind="${k}"]`)) showTab(k);
+});
 
 // ---- preview -----------------------------------------------------
 function schedulePreview(delay = 350) {
@@ -727,13 +888,18 @@ function addressChoices(addresses) {
   });
   return out;
 }
-// Fill the form with a name and one address, then refresh the preview
+// Fill the form with a name and one address, refresh the preview, and
+// take the user back up to it (the contacts section is below the fields)
 function useContact(name, lines) {
   if (name) $("a-name").value = name;
   $("a-address").value = lines.join("\n");
   $("c-choose").hidden = true; $("c-people").hidden = true;
+  savedButtons();
   schedulePreview(0);
+  showPreview();
 }
+// Scroll so the label preview and Print button are in view
+function showPreview() { $("preview-box").scrollIntoView({ block: "start", behavior: "smooth" }); }
 // Fill in the address straight away if there's one, or list them all and
 // let the user choose (there's never a default)
 function offerAddresses(name, choices) {
@@ -828,6 +994,8 @@ function parseVCards(text) {
       // family;given;additional;prefix;suffix -> "prefix given additional family suffix"
       const [family = "", given = "", extra = "", prefix = "", suffix = ""] = vSplit(value);
       card.n = [prefix, given, extra, family, suffix].map(x => x.trim()).filter(Boolean).join(" ");
+      card.prefix = prefix.trim();         // title, e.g. "Dr", "Mrs"
+      card.suffix = suffix.trim();         // e.g. "OBE", "Jr"
     } else if (prop === "ADR") {
       // PO box;extended (flat/suite);street;town;region;postcode;country
       const [pobox = "", ext = "", street = "", city = "", region = "", postalCode = "", country = ""] = vSplit(value);
@@ -842,9 +1010,22 @@ function parseVCards(text) {
   // Tidy: a name for each card, and a readable label for each address
   const titled = (t) => t ? t.charAt(0).toUpperCase() + t.slice(1) : "";
   return cards.map(c => ({
-    name: c.fn || c.n,
+    name: nameWithTitle(c),
     addresses: c.adrs.map(a => ({ ...a, label: titled(c.labels[a.group] || a.type) })),
   }));
+}
+// The name to print: the card's display name (FN), with the title (e.g.
+// "Dr") added at the front and any suffix (e.g. "OBE") at the end when the
+// display name leaves them out. It all goes into the one Name box, so it
+// can be edited if the name should be written another way.
+function nameWithTitle(c) {
+  let name = c.fn || c.n || "";
+  if (!c.fn) return name;                          // c.n already has them
+  const same = (a, b) => a.replace(/\./g, "").toLowerCase() === b.replace(/\./g, "").toLowerCase();
+  const words = name.split(/\s+/);
+  if (c.prefix && !same(words[0] || "", c.prefix.split(/\s+/)[0])) name = `${c.prefix} ${name}`;
+  if (c.suffix && !same(words[words.length - 1] || "", c.suffix.split(/\s+/).pop())) name = `${name} ${c.suffix}`;
+  return name;
 }
 // Read a chosen or dropped file and offer its contacts
 async function importContactFile(file) {
@@ -909,6 +1090,156 @@ $("c-file").addEventListener("change", e => { importContactFile(e.target.files[0
     importContactFile(e.dataTransfer.files[0]);
   });
 })();
+
+// ---- Address tab: saved addresses ---------------------------------------
+// Whole address labels saved under the name, encrypted on the server
+// (addressbook.py). The page only gets the list of names, plus one full
+// address when it's picked.
+let savedAddresses = [];               // [{id, name}]
+// Find a saved address with the name in the Name box (ignoring capitals)
+const savedMatch = () => savedAddresses.find(a => a.name.toLowerCase() === $("a-name").value.trim().toLowerCase());
+// "Save" or "Update", and Delete only when the name is already saved
+function savedButtons() {
+  const match = savedMatch();
+  $("s-save-address").textContent = match ? "Update saved address label" : "Save address label";
+  $("s-delete-address").hidden = !match;
+}
+function fillSaved(selectId) {
+  const sel = $("s-saved"); sel.length = 1;
+  savedAddresses.forEach(a => sel.add(new Option(a.name, a.id)));
+  sel.value = selectId || "";
+  savedButtons();
+  $("s-manage-title").textContent = `Manage saved address labels (${savedAddresses.length})`;
+  $("s-search").hidden = savedAddresses.length <= 8;
+  listSaved($("s-search").value);
+}
+// The manage list: each saved name with a Delete button, filtered by the search box
+function listSaved(filter) {
+  const list = $("s-list"); list.textContent = "";
+  const f = (filter || "").trim().toLowerCase();
+  const shown = savedAddresses.filter(a => !f || a.name.toLowerCase().includes(f));
+  shown.forEach(a => {
+    const li = document.createElement("li");
+    const name = document.createElement("span"); name.className = "grow"; name.textContent = a.name;
+    const del = document.createElement("button"); del.type = "button"; del.className = "btn2 danger mini"; del.textContent = "Delete";
+    del.addEventListener("click", () => deleteSaved(a));
+    li.append(name, del); list.append(li);
+  });
+  $("s-none").hidden = savedAddresses.length > 0;
+  if (savedAddresses.length && !shown.length) {
+    const li = document.createElement("li"); li.className = "break"; li.textContent = "No names match"; list.append(li);
+  }
+}
+$("s-search").addEventListener("input", e => listSaved(e.target.value));
+// Delete one saved address (after asking); the form is left as it is
+async function deleteSaved(a) {
+  if (!confirm(`Delete the saved address label for “${a.name}”?`)) return;
+  const res = await api("DELETE", `/api/addresses/${encodeURIComponent(a.id)}`);
+  if (!res.ok) { say("msg-saved", res.body.message || "Couldn't delete", "bad"); return; }
+  savedAddresses = res.body.addresses; fillSaved();
+  say("msg-saved", res.body.message, "ok");
+}
+async function loadSavedList() {
+  const res = await api("GET", "/api/addresses");
+  savedAddresses = res.ok ? res.body.addresses : [];
+  fillSaved();
+  if (!res.ok && res.body.message) say("msg-saved", res.body.message, "bad");
+}
+$("a-name").addEventListener("input", savedButtons);
+// Load one: fill every field, then show the preview
+$("s-saved").addEventListener("change", async e => {
+  if (!e.target.value) return;
+  const res = await api("GET", `/api/addresses/${encodeURIComponent(e.target.value)}`);
+  if (!res.ok) { say("msg-saved", res.body.message || "Couldn't load that address label", "bad"); return; }
+  const a = res.body.address;
+  $("a-name").value = a.name || ""; $("a-address").value = a.address || ""; $("a-note").value = a.note || "";
+  setRadio("address", "note_align", a.note_align === "center" ? "center" : "left");
+  $("a-icon").value = icons.some(i => i.name === a.icon) ? a.icon : "none"; showIconThumb();
+  savedButtons();
+  refreshNoteRows();
+  say("msg-saved", `Loaded the address label for “${a.name}”`, "info");
+  schedulePreview(0);
+  showPreview();
+});
+// Save (or update) the label as it is now, under the name
+$("s-save-address").addEventListener("click", async () => {
+  const d = formData("address");
+  if (!d.name.trim()) { say("msg-saved", "Type the name first: the label is saved under it", "bad"); return; }
+  const res = await api("PUT", "/api/addresses", { name: d.name, address: d.address, icon: d.icon === "none" ? "" : d.icon,
+                                                   note: d.note, note_align: d.note_align });
+  if (!res.ok) { say("msg-saved", res.body.message || "Couldn't save the address label", "bad"); return; }
+  savedAddresses = res.body.addresses; fillSaved(res.body.id);
+  say("msg-saved", res.body.message, "ok");
+});
+$("s-delete-address").addEventListener("click", () => { const match = savedMatch(); if (match) deleteSaved(match); });
+
+// ---- saved notes (address note and food notes) -------------------------
+// Reusable notes, kept per page in settings.saved_notes = {address: [...],
+// food: [...]}, each {text, align}. The address note keeps its alignment
+// (left or centre); food notes are always left. Pick one to put it in the
+// box, Save note to keep what's in the box, Delete note when the box
+// matches a saved one. Older saves were plain text: they read as left.
+const notesFor = (k) => ((settings.saved_notes || {})[k] || []).map(n => typeof n === "string"
+  ? { text: n, align: "left" } : { text: String(n.text || ""), align: n.align === "center" ? "center" : "left" });
+function setUpNoteRow(row) {
+  const k = row.dataset.notes, box = $(row.dataset.for), pick = row.querySelector(".note-pick");
+  const save = row.querySelector(".note-save"), del = row.querySelector(".note-del"), msg = `msg-note-${k}`;
+  const form = row.closest("form").dataset.kind, alignName = row.dataset.align;
+  // The alignment chosen now ("left" where the page has no choice)
+  const align = () => (alignName && radio(form, alignName)) || "left";
+  const short = (t) => { const one = t.replace(/\s+/g, " "); return one.length > 50 ? one.slice(0, 49) + "…" : one; };
+  // Redraw the list and the buttons for what's in the box now
+  function refresh() {
+    const notes = notesFor(k);
+    pick.length = 1;
+    pick.options[0].text = notes.length ? "Use a saved note…" : "No saved notes yet";
+    pick.disabled = !notes.length;
+    notes.forEach((n, i) => pick.add(new Option(short(n.text) + (alignName && n.align === "center" ? " (centred)" : ""), i)));
+    const text = box.value.trim(), match = notes.find(n => n.text === text);
+    const changed = match && alignName && match.align !== align();
+    del.hidden = !match;
+    // Save note → "Update note" when only the alignment differs, "Note saved" when it's all saved
+    save.textContent = !match ? "Save note" : changed ? "Update note" : "Note saved";
+    save.disabled = !text || (match && !changed);
+  }
+  // Save the whole list of notes for this page
+  async function store(list, done) {
+    const err = await saveSettings({ saved_notes: { ...(settings.saved_notes || {}), [k]: list } });
+    if (err) { say(msg, err, "bad"); return; }
+    refresh(); say(msg, done, "ok");
+  }
+  pick.addEventListener("change", () => {
+    const n = notesFor(k)[pick.value];
+    if (!n) return;
+    box.value = n.text;
+    if (alignName) setRadio(form, alignName, n.align);
+    pick.value = ""; refresh(); schedulePreview(0);
+  });
+  save.addEventListener("click", () => {
+    const text = box.value.trim();
+    if (!text) return;
+    const notes = notesFor(k), updating = notes.some(n => n.text === text);
+    const list = notes.filter(n => n.text !== text);
+    list.push({ text, align: align() });
+    store(list, updating ? "Note updated" : "Note saved – choose it from the list on any label");
+  });
+  del.addEventListener("click", () => {
+    const text = box.value.trim();
+    if (confirm(`Delete this saved note?\n\n${short(text)}`)) store(notesFor(k).filter(n => n.text !== text), "Saved note deleted");
+  });
+  box.addEventListener("input", refresh);
+  if (alignName) document.querySelectorAll(`form[data-kind="${form}"] input[name="${alignName}"]`)
+    .forEach(r => r.addEventListener("change", refresh));
+  row.refresh = refresh;
+}
+document.querySelectorAll(".noterow").forEach(setUpNoteRow);
+const refreshNoteRows = () => document.querySelectorAll(".noterow").forEach(r => r.refresh());
+
+// Folding sections remember whether they were left open, in this browser
+document.querySelectorAll("details[data-remember]").forEach(d => {
+  try { d.open = localStorage.getItem(d.dataset.remember) === "1"; } catch (e) {}
+  d.addEventListener("toggle", () => { try { localStorage.setItem(d.dataset.remember, d.open ? "1" : "0"); } catch (e) {} });
+});
 
 // ---- Address tab: icons -----------------------------------------------
 const titleCase = (n) => n.charAt(0).toUpperCase() + n.slice(1);
@@ -1007,8 +1338,15 @@ function showStorage(keepChoices) {
   }
   showCook();
 }
-// Hide the minutes/temperature boxes when there are no instructions
-function showCook() { $("f-cook").hidden = radio("food", "method") === "none"; }
+// Hide the cooking boxes when there are no instructions; otherwise show
+// only the boxes for the chosen appliance (temperature for oven and air
+// fryer, fan for oven, watts for microwave, just minutes for the hob)
+function showCook() {
+  $("f-cook").hidden = radio("food", "method") === "none";
+  const app = radio("food", "appliance") || "oven";
+  document.querySelectorAll("#f-cook label[data-app]").forEach(l => l.hidden = !l.dataset.app.split(" ").includes(app));
+}
+document.querySelectorAll('form[data-kind="food"] input[name="appliance"]').forEach(r => r.addEventListener("change", showCook));
 document.querySelectorAll('form[data-kind="food"] input[name="storage"]').forEach(r => r.addEventListener("change", () => showStorage(false)));
 document.querySelectorAll('form[data-kind="food"] input[name="method"]').forEach(r => r.addEventListener("change", showCook));
 
@@ -1019,6 +1357,29 @@ function convertTemp(value, from, to) {
   const n = Number(value), out = to === "F" ? n * 9 / 5 + 32 : (n - 32) * 5 / 9;
   return String(Math.round(out / 5) * 5);
 }
+// ---- saved-label lists (shared) ---------------------------------------
+// Fill a folding "Manage saved …" list: one row per saved item with a
+// Delete button, a search box once there are more than 8, and the count
+// in the heading. ids: <p>-list, <p>-none, <p>-search, <p>-manage-title.
+//   items:    the saved items      text: (item) => what the row shows
+//   onDelete: (index) => ...       what: e.g. "saved trips" (for the heading)
+function fillManage(p, items, text, onDelete, what) {
+  $(`${p}-manage-title`).textContent = `Manage ${what} (${items.length})`;
+  $(`${p}-search`).hidden = items.length <= 8;
+  const list = $(`${p}-list`); list.textContent = "";
+  const f = $(`${p}-search`).value.trim().toLowerCase();
+  const shown = items.map((item, i) => ({ item, i })).filter(({ item }) => !f || text(item).toLowerCase().includes(f));
+  shown.forEach(({ item, i }) => {
+    const li = document.createElement("li");
+    const name = document.createElement("span"); name.className = "grow"; name.textContent = text(item);
+    const del = document.createElement("button"); del.type = "button"; del.className = "btn2 danger mini"; del.textContent = "Delete";
+    del.addEventListener("click", () => onDelete(i));
+    li.append(name, del); list.append(li);
+  });
+  $(`${p}-none`).hidden = items.length > 0;
+  if (items.length && !shown.length) { const li = document.createElement("li"); li.className = "break"; li.textContent = "Nothing matches"; list.append(li); }
+}
+
 const presets = () => settings.food_presets || [];
 const findPreset = (title) => presets().findIndex(p => (p.title || "").toLowerCase() === title.trim().toLowerCase());
 function fillPresets() {
@@ -1026,11 +1387,14 @@ function fillPresets() {
   sel.length = 1;
   presets().forEach((p, i) => sel.add(new Option(`${p.title} · ${STORAGE_NAMES[p.storage] || "Freezer"}`, i)));
   presetButtons();
+  $("f-manage-title").textContent = `Manage saved food labels (${presets().length})`;
+  $("f-search").hidden = presets().length <= 8;
+  listPresets($("f-search").value);
 }
 // "Save as preset" becomes "Update preset" when the food name is already saved
 function presetButtons() {
   const found = findPreset($("f-title").value) >= 0;
-  $("f-save").textContent = found ? "Update preset" : "Save as preset";
+  $("f-save").textContent = found ? "Update saved food label" : "Save food label";
   $("f-delete").hidden = !found;
 }
 $("f-title").addEventListener("input", presetButtons);
@@ -1044,6 +1408,9 @@ $("f-preset").addEventListener("change", e => {
   $("f-shelf").value = p.shelf ?? "";
   setRadio("food", "shelf_unit", p.shelf_unit || (p.storage === "frozen" || !p.storage ? "months" : "days"));
   setRadio("food", "method", p.method || "none");
+  // Saved before the appliance choice existed: those were all oven
+  setRadio("food", "appliance", p.appliance || "oven");
+  $("f-watts").value = p.watts ?? "";
   $("f-minutes").value = p.minutes ?? "";
   // Saved in the other unit? Convert to the one chosen in Settings
   const from = p.temp_unit || "C", to = settings.temp_unit || "C";
@@ -1051,7 +1418,9 @@ $("f-preset").addEventListener("change", e => {
   $("f-fan").value = convertTemp(p.fan, from, to);
   $("f-notes").value = p.notes || "";
   showStorage(true); presetButtons();
+  refreshNoteRows();
   say("msg-food", `Loaded “${p.title}” with today's date`, "info");
+  showPreview();
   schedulePreview(0);
 });
 // Save (or update) a preset with everything except the date
@@ -1059,6 +1428,7 @@ $("f-save").addEventListener("click", async () => {
   const d = formData("food");
   if (!d.title.trim()) { say("msg-food", "Type the food name first", "bad"); return; }
   const preset = { title: d.title.trim(), storage: d.storage, shelf: d.shelf, shelf_unit: d.shelf_unit, method: d.method,
+                   appliance: d.appliance, watts: d.watts,
                    minutes: d.minutes, temp: d.temp, fan: d.fan, temp_unit: settings.temp_unit || "C", notes: d.notes };
   const updating = findPreset(preset.title) >= 0;
   const list = presets().filter(p => p.title.toLowerCase() !== preset.title.toLowerCase());
@@ -1067,18 +1437,36 @@ $("f-save").addEventListener("click", async () => {
   if (err) { say("msg-food", err, "bad"); return; }
   fillPresets();
   $("f-preset").value = String(findPreset(preset.title));
-  say("msg-food", updating ? `Updated preset “${preset.title}”` : `Saved preset “${preset.title}” – choose it from Saved food next time`, "ok");
+  say("msg-food", updating ? `Updated the saved food label “${preset.title}”` : `Saved the food label “${preset.title}”`, "ok");
 });
-$("f-delete").addEventListener("click", async () => {
-  const i = findPreset($("f-title").value);
-  if (i < 0) return;
-  const title = presets()[i].title;
-  if (!confirm(`Delete the preset “${title}”?`)) return;
+// Delete a saved food label (after asking); the form is left as it is
+async function deletePreset(i) {
+  const p = presets()[i];
+  if (!p || !confirm(`Delete the saved food label “${p.title}”?`)) return;
   const err = await saveSettings({ food_presets: presets().filter((_, n) => n !== i) });
   if (err) { say("msg-food", err, "bad"); return; }
   fillPresets(); $("f-preset").value = "";
-  say("msg-food", `Deleted preset “${title}”`, "ok");
-});
+  say("msg-food", `Deleted the saved food label “${p.title}”`, "ok");
+}
+$("f-delete").addEventListener("click", () => { const i = findPreset($("f-title").value); if (i >= 0) deletePreset(i); });
+// The manage list: each saved food with a Delete button, filtered by the search box
+function listPresets(filter) {
+  const list = $("f-list"); list.textContent = "";
+  const f = (filter || "").trim().toLowerCase();
+  const all = presets().map((p, i) => ({ p, i }));
+  const shown = all.filter(({ p }) => !f || p.title.toLowerCase().includes(f));
+  shown.forEach(({ p, i }) => {
+    const li = document.createElement("li");
+    const name = document.createElement("span"); name.className = "grow";
+    name.textContent = `${p.title} · ${STORAGE_NAMES[p.storage] || "Freezer"}`;
+    const del = document.createElement("button"); del.type = "button"; del.className = "btn2 danger mini"; del.textContent = "Delete";
+    del.addEventListener("click", () => deletePreset(i));
+    li.append(name, del); list.append(li);
+  });
+  $("f-none").hidden = all.length > 0;
+  if (all.length && !shown.length) { const li = document.createElement("li"); li.className = "break"; li.textContent = "No foods match"; list.append(li); }
+}
+$("f-search").addEventListener("input", e => listPresets(e.target.value));
 
 // ---- Travel tab: my details ---------------------------------------------
 // Saved details are shown locked (with Edit / Clear); unsaved ones as boxes
@@ -1129,7 +1517,7 @@ function legText(l) {
 function sortLegs() { legs.sort((a, b) => (a.date + hhmm(a.dep)).localeCompare(b.date + hhmm(b.dep))); }
 // Remember the flights in this browser, so leaving the page doesn't lose them
 function saveDraft() {
-  try { localStorage.setItem("labelprinter-travel", JSON.stringify({ legs, trip: $("t-trip-name").value })); } catch (e) {}
+  try { localStorage.setItem("labelprinter-luggage", JSON.stringify({ legs, trip: $("t-trip-name").value })); } catch (e) {}
 }
 // Redraw the list of flights, the airport suggestions and the preview
 function showLegs() {
@@ -1207,7 +1595,7 @@ $("l-add").addEventListener("click", () => {
 $("t-paste-fill").addEventListener("click", async () => {
   const text = $("t-paste").value;
   if (!text.trim()) { say("msg-paste", "Paste your flight details first", "bad"); return; }
-  const res = await api("POST", "/api/travel/parse", { text });
+  const res = await api("POST", "/api/luggage/parse", { text });
   if (!res.ok) { say("msg-paste", res.body.message || "Couldn't read that", "bad"); return; }
   const l = res.body.leg;
   if (l.date) $("l-date").value = l.date;
@@ -1221,49 +1609,140 @@ $("t-paste-fill").addEventListener("click", async () => {
   $("l-add").scrollIntoView({ block: "nearest", behavior: "smooth" });
 });
 
-// ---- Travel tab: saved trips ---------------------------------------------------
+// ---- Luggage tab: saved trips -------------------------------------------
+// Same pattern as saved address and food labels: load from the list, save
+// (or update) under the trip name, delete, and a folding manage list.
 const trips = () => settings.trips || [];
+const findTrip = (name) => trips().findIndex(t => t.name.toLowerCase() === name.trim().toLowerCase());
+const tripText = (t) => `${t.name} (${t.legs.length} flight${t.legs.length === 1 ? "" : "s"})`;
+// Refill the list, the manage list and the buttons; select `selectName` if given
 function fillTrips(selectName) {
   const sel = $("t-trip"); sel.length = 1;
-  trips().forEach((t, i) => sel.add(new Option(`${t.name} (${t.legs.length} flight${t.legs.length === 1 ? "" : "s"})`, i)));
-  const i = trips().findIndex(t => t.name === selectName);
+  trips().forEach((t, i) => sel.add(new Option(tripText(t), i)));
+  const i = selectName ? findTrip(selectName) : -1;
   sel.value = i >= 0 ? String(i) : "";
-  $("t-trip-delete").hidden = i < 0;
+  tripButtons();
+  fillManage("t", trips(), tripText, deleteTrip, "saved trips");
 }
+// "Save trip" becomes "Update saved trip" when the name is already saved
+function tripButtons() {
+  const found = findTrip($("t-trip-name").value) >= 0;
+  $("t-trip-save").textContent = found ? "Update saved trip" : "Save trip";
+  $("t-trip-delete").hidden = !found;
+}
+$("t-trip-name").addEventListener("input", () => { tripButtons(); saveDraft(); });
+$("t-search").addEventListener("input", () => fillTrips());
+// Load a trip: its flights replace the ones on the page
 $("t-trip").addEventListener("change", e => {
   const t = trips()[e.target.value];
-  $("t-trip-delete").hidden = !t;
   if (!t) return;
   legs = t.legs.map(l => ({ ...l })); $("t-trip-name").value = t.name;
-  showLegs(); resetLegForm();
+  showLegs(); resetLegForm(); tripButtons(); saveDraft();
   say("msg-trip", `Loaded “${t.name}”`, "info");
+  showPreview();
 });
+// Save (or update) the flights on the page under the trip name
 $("t-trip-save").addEventListener("click", async () => {
   const name = $("t-trip-name").value.trim();
-  if (!name) { say("msg-trip", "Give the trip a name first", "bad"); return; }
+  if (!name) { say("msg-trip", "Type a trip name first: the flights are saved under it.", "bad"); return; }
   if (!legs.length) { say("msg-trip", "Add some flights first", "bad"); return; }
-  const exists = trips().some(t => t.name.toLowerCase() === name.toLowerCase());
+  const updating = findTrip(name) >= 0;
   const list = trips().filter(t => t.name.toLowerCase() !== name.toLowerCase());
   list.push({ name, legs }); list.sort((a, b) => a.name.localeCompare(b.name));
   const err = await saveSettings({ trips: list });
   if (err) { say("msg-trip", err, "bad"); return; }
   fillTrips(name); saveDraft();
-  say("msg-trip", exists ? `Updated trip “${name}”` : `Saved trip “${name}” – load it from Saved trip any time`, "ok");
+  say("msg-trip", updating ? `Updated the saved trip “${name}”` : `Saved the trip “${name}”`, "ok");
 });
-$("t-trip-delete").addEventListener("click", async () => {
-  const t = trips()[$("t-trip").value];
+// Delete a saved trip (after asking); the flights on the page stay
+async function deleteTrip(i) {
+  const t = trips()[i];
   if (!t || !confirm(`Delete the saved trip “${t.name}”? (The flights on this page stay.)`)) return;
-  const err = await saveSettings({ trips: trips().filter(x => x !== t) });
+  const err = await saveSettings({ trips: trips().filter((_, n) => n !== i) });
   if (err) { say("msg-trip", err, "bad"); return; }
   fillTrips();
-  say("msg-trip", `Deleted trip “${t.name}”`, "ok");
-});
+  say("msg-trip", `Deleted the saved trip “${t.name}”`, "ok");
+}
+$("t-trip-delete").addEventListener("click", () => { const i = findTrip($("t-trip-name").value); if (i >= 0) deleteTrip(i); });
+// Clear the flights on the page (saved trips stay)
 $("t-clear").addEventListener("click", () => {
   if (legs.length && !confirm("Clear all the flights on this page? (Saved trips stay.)")) return;
-  legs = []; $("t-trip-name").value = ""; $("t-trip").value = ""; $("t-trip-delete").hidden = true;
-  $("l-date").value = today(); showLegs(); resetLegForm();
-  say("msg-trip", "Flights cleared", "ok");
+  legs = []; $("t-trip-name").value = ""; $("t-trip").value = ""; tripButtons();
+  $("l-date").value = today(); showLegs(); resetLegForm(); saveDraft();
+  say("msg-clear", "Flights cleared", "ok");
 });
+
+// ---- Battery tab: saved battery labels -----------------------------------
+// The device and battery type, saved under the device name. Loading one
+// sets "Changed on" to today.
+const batteries = () => settings.battery_presets || [];
+const findBattery = (device) => batteries().findIndex(b => b.device.toLowerCase() === device.trim().toLowerCase());
+const batteryText = (b) => b.battery ? `${b.device} · ${b.battery}` : b.device;
+// Refill the list, the manage list and the buttons
+function fillBatteries(selectDevice) {
+  const sel = $("b-saved"); sel.length = 1;
+  batteries().forEach((b, i) => sel.add(new Option(batteryText(b), i)));
+  const i = selectDevice ? findBattery(selectDevice) : -1;
+  sel.value = i >= 0 ? String(i) : "";
+  batteryButtons();
+  fillManage("b", batteries(), batteryText, deleteBattery, "saved battery labels");
+}
+// "Save battery label" becomes "Update …" when the device is already saved
+function batteryButtons() {
+  const found = findBattery($("b-device").value) >= 0;
+  $("b-save").textContent = found ? "Update saved battery label" : "Save battery label";
+  $("b-delete").hidden = !found;
+}
+$("b-device").addEventListener("input", batteryButtons);
+$("b-search").addEventListener("input", () => fillBatteries());
+// Load a saved battery label, with today's date
+$("b-saved").addEventListener("change", e => {
+  const b = batteries()[e.target.value];
+  if (!b) return;
+  $("b-device").value = b.device; $("b-battery").value = b.battery || ""; $("b-changed").value = today();
+  batteryButtons();
+  say("msg-battery", `Loaded “${b.device}” with today's date`, "info");
+  showPreview(); schedulePreview(0);
+});
+// Save (or update) the device and battery type
+$("b-save").addEventListener("click", async () => {
+  const device = $("b-device").value.trim(), battery = $("b-battery").value.trim();
+  if (!device) { say("msg-battery", "Type the device first: the label is saved under it.", "bad"); return; }
+  const updating = findBattery(device) >= 0;
+  const list = batteries().filter(b => b.device.toLowerCase() !== device.toLowerCase());
+  list.push({ device, battery }); list.sort((a, b) => a.device.localeCompare(b.device));
+  const err = await saveSettings({ battery_presets: list });
+  if (err) { say("msg-battery", err, "bad"); return; }
+  fillBatteries(device);
+  say("msg-battery", updating ? `Updated the saved battery label “${device}”` : `Saved the battery label “${device}”`, "ok");
+});
+// Delete a saved battery label (after asking); the form is left as it is
+async function deleteBattery(i) {
+  const b = batteries()[i];
+  if (!b || !confirm(`Delete the saved battery label “${b.device}”?`)) return;
+  const err = await saveSettings({ battery_presets: batteries().filter((_, n) => n !== i) });
+  if (err) { say("msg-battery", err, "bad"); return; }
+  fillBatteries();
+  say("msg-battery", `Deleted the saved battery label “${b.device}”`, "ok");
+}
+$("b-delete").addEventListener("click", () => { const i = findBattery($("b-device").value); if (i >= 0) deleteBattery(i); });
+
+// ---- Clear label (address, food, battery and network pages) ------------
+// Puts the page's boxes back to how they start: empty, dates today, choices
+// at their defaults. Saved labels, saved notes and your own icons stay.
+function clearForm(k) {
+  document.querySelector(`form[data-kind="${k}"]`).reset();
+  if (k === "address") { showIconThumb(); savedButtons(); }
+  if (k === "food") { $("f-date").value = today(); showStorage(false); presetButtons(); }
+  if (k === "battery") { $("b-changed").value = today(); batteryButtons(); }
+  refreshNoteRows();
+  schedulePreview(0);
+}
+document.querySelectorAll(".clear-form").forEach(btn => btn.addEventListener("click", () => {
+  const k = btn.closest("form").dataset.kind;
+  clearForm(k);
+  say(`msg-clear-${k}`, "Cleared", "ok");
+}));
 
 // ---- Settings tab: printer and time zone ---------------------------
 // Read the printer fields as the object the API expects
@@ -1274,36 +1753,49 @@ function printerFields() {
 // to check (e.g. "Now 09:40 GMT"; in summer it would say BST)
 function showZoneTime() {
   const tz = $("s-tz").value;
-  if (!tz) { $("s-tz-now").textContent = "Used for today's date on labels. Daylight saving (e.g. GMT → BST) changes automatically."; return; }
+  if (!tz) { $("s-tz-now").textContent = "Daylight saving (e.g. GMT → BST) changes automatically."; return; }
   try {
     const now = new Intl.DateTimeFormat("en-GB", { timeZone: tz, weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZoneName: "short" }).format(new Date());
     $("s-tz-now").textContent = `Current time: ${now}. Daylight saving changes automatically.`;
   } catch (e) { $("s-tz-now").textContent = ""; }
 }
-$("s-tz").addEventListener("change", showZoneTime);
+// The time zone is saved as soon as it changes (on a new install it's also
+// saved by Test and save, so setup still finishes in one step)
+async function saveZone() {
+  const tz = $("s-tz").value;
+  showZoneTime();
+  if (!tz) return;
+  const err = await saveSettings({ timezone: tz });
+  if (err) { say("msg-tz", err, "bad"); return; }
+  $("f-date").value = today(); $("b-changed").value = today();
+  if (locked && isSetUp()) { setLocked(false); checkPrinter(); }
+  say("msg-tz", `Saved: ${tz.replace(/_/g, " ")}`, "ok");
+}
+$("s-tz").addEventListener("change", saveZone);
 $("s-tz-device").addEventListener("click", () => {
   const z = deviceZone();
-  if (z && [...$("s-tz").options].some(o => o.value === z)) {
-    $("s-tz").value = z; showZoneTime();
-    say("msg-settings", `Time zone set to ${z.replace(/_/g, " ")}. Tap Test and save to keep it.`, "info");
-  } else say("msg-settings", "Couldn't tell this device's time zone; pick it from the list", "bad");
+  if (z && [...$("s-tz").options].some(o => o.value === z)) { $("s-tz").value = z; saveZone(); }
+  else say("msg-tz", "Couldn't tell this device's time zone; pick it from the list", "bad");
 });
 // Save: the server tests the printer connection first and refuses to save
 // if it can't connect. The first successful save unlocks the label tabs.
 // We stay on this tab so the result is shown right under the button.
 $("s-save").addEventListener("click", async () => {
   if (!$("s-host").value.trim()) { say("msg-settings", "Enter the printer's IP address", "bad"); return; }
-  if (!$("s-tz").value) { say("msg-settings", "Choose a time zone", "bad"); return; }
+  if (!settings.timezone && !$("s-tz").value) { say("msg-settings", "Choose a time zone below first", "bad"); return; }
   const btn = $("s-save"), firstTime = locked;
   btn.disabled = true; btn.textContent = "Connecting…"; say("msg-settings", "");
-  const err = await saveSettings({ printer: printerFields(), timezone: $("s-tz").value });
+  // A new install also stores the time zone shown (the device's, suggested)
+  const patch = { printer: printerFields() };
+  if (!settings.timezone) patch.timezone = $("s-tz").value;
+  const err = await saveSettings(patch);
   btn.disabled = false; btn.textContent = "Test and save";
   if (err) { say("msg-settings", err, "bad"); return; }
   $("f-date").value = today(); $("b-changed").value = today();
   setLocked(!isSetUp());
   checkPrinter();
   say("msg-settings", firstTime && !locked
-    ? "Printer connected and settings saved. The label tabs are unlocked – choose one at the top."
+    ? "Printer connected and settings saved. The label pages are unlocked – choose one at the top."
     : "Printer connected and settings saved", "ok");
 });
 // Temperature unit: saved as soon as it's changed
@@ -1381,8 +1873,11 @@ async function init() {
   try { icons = await (await fetch("/api/icons")).json(); } catch (e) { icons = []; }
   fillIcons("none");
   setUpContacts();
+  loadSavedList();
+  refreshNoteRows();
   fillPresets();
   fillTrips();
+  fillBatteries();
   (settings.battery_types || []).forEach(t => $("b-types").append(new Option(t)));
   showMe(false);
   const pr = settings.printer || {};
@@ -1400,7 +1895,7 @@ async function init() {
   showStorage(false);
   // Flights from last time (kept in this browser), then the next-flight defaults
   try {
-    const draft = JSON.parse(localStorage.getItem("labelprinter-travel") || "{}");
+    const draft = JSON.parse(localStorage.getItem("labelprinter-luggage") || "{}");
     legs = Array.isArray(draft.legs) ? draft.legs : [];
     $("t-trip-name").value = draft.trip || "";
   } catch (e) { legs = []; }
@@ -1409,6 +1904,9 @@ async function init() {
   fillTrips($("t-trip-name").value);
   let start = "address";
   try { start = localStorage.getItem("labelprinter-tab") || start; } catch (e) {}
+  // A link straight to a page (/#luggage) wins over the last page used
+  const linked = decodeURIComponent(location.hash.slice(1)).toLowerCase();
+  if (linked && document.querySelector(`form[data-kind="${linked}"]`)) start = linked;
   // Until setup is done, only the Settings tab is available
   setLocked(!isSetUp());
   if (locked) start = "settings";
